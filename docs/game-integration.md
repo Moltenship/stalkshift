@@ -44,6 +44,7 @@ Seven bool channels cover indicators, lights, wipers and parking brake. Four num
 | Left lever away from driver | `hblight` press/release; game handles the toggle |
 | Right selector bottom to top | D / N / R / P; one 150 ms gear command per observed position change |
 | P | Neutral and one parking-brake press only if telemetry reports brake off; at most one second waiting for that telemetry |
+| P to R, N or D | Release parking brake once if telemetry reports it on; wait at most one second for missing telemetry. Startup in a lower position does not release it. An earlier toggle must settle before another is requested. |
 | Right lever towards driver | Hold normal `horn` until release |
 | Right lever below lowest detent | One `parkingbrake` press per entry |
 | REAR spring movement from OFF | One `flasher4way` press; upper-context spring movement is unassigned |

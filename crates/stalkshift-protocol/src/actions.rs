@@ -20,6 +20,8 @@ pub(crate) struct Actions {
     pulses: [Option<Instant>; INPUT_COUNT],
     repeat: Option<Instant>,
     park_wait: Option<Instant>,
+    release_park_wait: Option<Instant>,
+    parking_quiet_until: Option<Instant>,
     pub automatic: bool,
     auto_target: Option<i32>,
     auto_pending: Option<(i32, Instant, i32)>,
@@ -28,6 +30,11 @@ pub(crate) struct Actions {
 }
 impl Actions {
     fn pulse(&mut self, mask: u64, now: Instant) {
+        if mask & PARKING != 0 {
+            // Let an earlier toggle release and reach telemetry before deciding
+            // whether the next requested brake state needs another toggle.
+            self.parking_quiet_until = Some(now + REPEAT);
+        }
         for (index, deadline) in self.pulses.iter_mut().enumerate() {
             if mask & (1 << index) != 0 {
                 *deadline = Some(now + PULSE);
@@ -50,22 +57,51 @@ impl Actions {
     ) -> u64 {
         let rising = desired & !self.previous;
         let gear = desired & GEAR_MASK;
-        if gear != self.previous & GEAR_MASK {
+        let previous_gear = self.previous & GEAR_MASK;
+        if gear != previous_gear {
             self.clear(NEUTRAL | DRIVE | REVERSE);
             self.park_wait = None;
             if gear == PARK_REQUEST {
+                self.release_park_wait = None;
                 self.pulse(NEUTRAL, now);
                 self.park_wait = Some(now);
             } else {
                 self.pulse(gear, now);
+                if gear == 0 {
+                    self.release_park_wait = None;
+                } else if previous_gear == PARK_REQUEST {
+                    self.release_park_wait = Some(now);
+                }
             }
         }
+        // A deliberate manual brake press takes precedence over selector work.
+        if rising & PARKING != 0 {
+            self.park_wait = None;
+            self.release_park_wait = None;
+        }
+        let brake_settled = self.parking_quiet_until.is_none_or(|until| now >= until);
         if let Some(start) = self.park_wait {
-            if gear != PARK_REQUEST || now.duration_since(start) >= ACK || parking == Some(true) {
+            if gear != PARK_REQUEST || now.duration_since(start) >= ACK {
                 self.park_wait = None;
-            } else if parking == Some(false) {
-                self.pulse(PARKING, now);
-                self.park_wait = None;
+            } else if brake_settled {
+                if parking == Some(false) {
+                    self.pulse(PARKING, now);
+                }
+                if parking.is_some() {
+                    self.park_wait = None;
+                }
+            }
+        }
+        if let Some(start) = self.release_park_wait {
+            if now.duration_since(start) >= ACK {
+                self.release_park_wait = None;
+            } else if brake_settled {
+                if parking == Some(true) {
+                    self.pulse(PARKING, now);
+                }
+                if parking.is_some() {
+                    self.release_park_wait = None;
+                }
             }
         }
         self.pulse(
@@ -202,7 +238,7 @@ impl Actions {
 mod tests {
     use super::*;
     #[test]
-    fn park_never_releases_an_applied_brake_or_repeats_a_toggle() {
+    fn entering_park_never_releases_an_applied_brake_or_repeats_a_toggle() {
         let now = Instant::now();
         let mut a = Actions::default();
         assert_eq!(
@@ -222,6 +258,81 @@ mod tests {
             a.apply(PARK_REQUEST, Some(false), UNKNOWN_MOTION, now + ACK * 3),
             0
         );
+    }
+    #[test]
+    fn leaving_park_releases_once_into_each_lower_position() {
+        let now = Instant::now();
+        for gear in [REVERSE, NEUTRAL, DRIVE] {
+            let mut a = Actions::default();
+            a.apply(PARK_REQUEST, Some(true), UNKNOWN_MOTION, now);
+            assert_eq!(
+                a.apply(gear, Some(true), UNKNOWN_MOTION, now + ACK),
+                gear | PARKING
+            );
+            assert_eq!(a.apply(gear, Some(true), UNKNOWN_MOTION, now + ACK * 2), 0);
+        }
+    }
+    #[test]
+    fn lower_position_does_not_toggle_an_off_brake_or_invent_a_park_exit() {
+        let now = Instant::now();
+        let mut a = Actions::default();
+        assert_eq!(a.apply(REVERSE, Some(true), UNKNOWN_MOTION, now), REVERSE);
+        a.apply(PARK_REQUEST, Some(true), UNKNOWN_MOTION, now + ACK);
+        assert_eq!(
+            a.apply(REVERSE, Some(false), UNKNOWN_MOTION, now + ACK * 2),
+            REVERSE
+        );
+        assert_eq!(
+            a.apply(REVERSE, Some(true), UNKNOWN_MOTION, now + ACK * 3),
+            0
+        );
+    }
+    #[test]
+    fn park_exit_waits_for_missing_telemetry_but_has_a_deadline() {
+        let now = Instant::now();
+        let mut a = Actions::default();
+        a.apply(PARK_REQUEST, Some(true), UNKNOWN_MOTION, now);
+        assert_eq!(a.apply(REVERSE, None, UNKNOWN_MOTION, now + ACK), REVERSE);
+        assert_eq!(
+            a.apply(REVERSE, Some(true), UNKNOWN_MOTION, now + ACK + REPEAT),
+            PARKING
+        );
+        a.apply(PARK_REQUEST, Some(true), UNKNOWN_MOTION, now + ACK * 2);
+        a.apply(REVERSE, None, UNKNOWN_MOTION, now + ACK * 3);
+        assert_eq!(
+            a.apply(REVERSE, Some(true), UNKNOWN_MOTION, now + ACK * 4),
+            0
+        );
+    }
+    #[test]
+    fn rapid_park_exit_waits_for_the_earlier_brake_toggle_to_settle() {
+        let now = Instant::now();
+        let mut a = Actions::default();
+        assert_eq!(
+            a.apply(PARK_REQUEST, Some(false), UNKNOWN_MOTION, now),
+            NEUTRAL | PARKING
+        );
+        a.apply(
+            REVERSE,
+            Some(false),
+            UNKNOWN_MOTION,
+            now + Duration::from_millis(10),
+        );
+        // Old press has finished, but the release request must still wait.
+        assert_eq!(
+            a.apply(
+                REVERSE,
+                Some(true),
+                UNKNOWN_MOTION,
+                now + Duration::from_millis(200)
+            ),
+            0
+        );
+        assert_eq!(
+            a.apply(REVERSE, Some(true), UNKNOWN_MOTION, now + REPEAT),
+            PARKING
+        );
+        assert_eq!(a.apply(REVERSE, Some(false), UNKNOWN_MOTION, now + ACK), 0);
     }
     #[test]
     fn held_toggle_is_once_and_speed_holds_have_release_intervals() {
