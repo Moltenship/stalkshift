@@ -4,6 +4,31 @@ use std::time::{Duration, Instant};
 const PULSE: Duration = Duration::from_millis(150);
 const REPEAT: Duration = Duration::from_millis(300);
 const ACK: Duration = Duration::from_secs(1);
+/// Display units for the game's configured five-unit cruise adjustment step.
+/// Protocol speed values remain millimetres per second in either game.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum CruiseUnit {
+    #[default]
+    Kmh,
+    Mph,
+}
+impl CruiseUnit {
+    fn ratio(self) -> (i64, i64) {
+        match self {
+            Self::Kmh => (10000, 36),
+            Self::Mph => (44704, 100),
+        }
+    }
+    fn target(self, limit: i32) -> i32 {
+        let (numerator, denominator) = self.ratio();
+        let units = (i64::from(limit) * denominator + numerator / 2) / numerator;
+        (units / 5 * 5 * numerator / denominator) as i32
+    }
+    fn step(self) -> i32 {
+        let (numerator, denominator) = self.ratio();
+        (5 * numerator / denominator) as i32
+    }
+}
 const MOMENTARY: u64 = HAZARD
     | GEAR_MASK
     | PARKING
@@ -16,6 +41,7 @@ const MOMENTARY: u64 = HAZARD
 
 #[derive(Debug, Default)]
 pub(crate) struct Actions {
+    unit: CruiseUnit,
     previous: u64,
     pulses: [Option<Instant>; INPUT_COUNT],
     repeat: Option<Instant>,
@@ -29,6 +55,12 @@ pub(crate) struct Actions {
     last_cruise: Option<i32>,
 }
 impl Actions {
+    pub fn with_unit(unit: CruiseUnit) -> Self {
+        Self {
+            unit,
+            ..Self::default()
+        }
+    }
     fn pulse(&mut self, mask: u64, now: Instant) {
         if mask & PARKING != 0 {
             // Let an earlier toggle release and reach telemetry before deciding
@@ -171,9 +203,9 @@ impl Actions {
             self.last_cruise = None;
             return;
         }
-        // ETS2 is configured for a 5 km/h grid. Round the SDK limit to km/h,
-        // then choose a reachable grid value at or below that limit.
-        let target = ((i64::from(limit) * 36 + 5000) / 10000 / 5 * 50000 / 36) as i32;
+        // Round SDK speed to the configured display units, then select a
+        // reachable five-unit grid value at or below the displayed road limit.
+        let target = self.unit.target(limit);
         if target <= 0 {
             return;
         }
@@ -194,7 +226,7 @@ impl Actions {
             // Opposite/excessive movement is likely a manual adjustment. A
             // refused or overshooting step must never oscillate indefinitely.
             let delta = cruise - before;
-            if delta.signum() != sign || delta.abs() > 1700 {
+            if delta.signum() != sign || delta.abs() > self.unit.step() + 312 {
                 self.automatic = false;
                 self.clear(CRUISE_UP | CRUISE_DOWN);
                 return;
@@ -237,6 +269,52 @@ impl Actions {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn mph_targets_and_acknowledged_steps_use_miles_without_false_manual_override() {
+        let now = Instant::now();
+        let mut a = Actions::with_unit(CruiseUnit::Mph);
+        // 50 -> 55 -> 60 mph. A five-mph step exceeds the old 1700 mm/s limit.
+        assert_eq!(
+            a.apply(AUTO_TOGGLE, None, [22352, 26822, 22000, 10], now),
+            CRUISE_UP
+        );
+        assert_eq!(
+            a.apply(0, None, [24587, 26822, 22000, 10], now + REPEAT),
+            CRUISE_UP
+        );
+        assert!(a.automatic);
+        assert_eq!(
+            a.apply(0, None, [26822, 26822, 22000, 10], now + REPEAT * 2),
+            0
+        );
+        // A user adjustment in the opposite direction yields control.
+        assert_eq!(
+            a.apply(0, None, [24587, 26822, 22000, 10], now + REPEAT * 3),
+            0
+        );
+        assert!(!a.automatic);
+    }
+    #[test]
+    fn road_limits_round_to_the_correct_five_unit_grid() {
+        assert_eq!(CruiseUnit::Kmh.target(25000), 25000); // 90 km/h
+        assert_eq!(CruiseUnit::Mph.target(26822), 26822); // 60 mph
+        assert_eq!(CruiseUnit::Mph.target(28163), 26822); // 63 -> 60 mph
+        assert_eq!(CruiseUnit::Kmh.target(23056), 22222); // 83 -> 80 km/h
+    }
+    #[test]
+    fn mph_overshoot_stops_without_oscillation() {
+        let now = Instant::now();
+        let mut a = Actions::with_unit(CruiseUnit::Mph);
+        assert_eq!(
+            a.apply(AUTO_TOGGLE, None, [26000, 26822, 25000, 10], now),
+            CRUISE_UP
+        );
+        assert_eq!(a.apply(0, None, [28235, 26822, 25000, 10], now + REPEAT), 0);
+        assert_eq!(
+            a.apply(0, None, [28235, 26822, 25000, 10], now + ACK * 2),
+            0
+        );
+    }
     #[test]
     fn combined_horn_and_parking_holds_horn_but_only_pulses_brake_once() {
         let now = Instant::now();

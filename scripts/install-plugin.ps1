@@ -3,13 +3,14 @@ param(
     [string]$PluginPath = (Join-Path $PSScriptRoot '../target/release/stalkshift_plugin.dll')
 )
 $ErrorActionPreference = 'Stop'
-if (Get-Process -Name eurotrucks2 -ErrorAction SilentlyContinue) {
-    throw 'Close ETS2 completely before installing the plugin.'
+if (Get-Process -Name eurotrucks2,amtrucks -ErrorAction SilentlyContinue) {
+    throw 'Close ETS2 and ATS completely before installing the plugin.'
 }
 $gameRoot = (Resolve-Path -LiteralPath $GameDirectory).Path
 $binaryDirectory = Join-Path $gameRoot 'bin/win_x64'
-if (-not (Test-Path -LiteralPath (Join-Path $binaryDirectory 'eurotrucks2.exe') -PathType Leaf)) {
-    throw 'GameDirectory must contain bin/win_x64/eurotrucks2.exe.'
+if (-not (Test-Path -LiteralPath (Join-Path $binaryDirectory 'eurotrucks2.exe') -PathType Leaf) -and
+    -not (Test-Path -LiteralPath (Join-Path $binaryDirectory 'amtrucks.exe') -PathType Leaf)) {
+    throw 'GameDirectory must contain bin/win_x64/eurotrucks2.exe or amtrucks.exe.'
 }
 $pluginSource = (Resolve-Path -LiteralPath $PluginPath).Path
 $pluginBytes = [System.IO.File]::ReadAllBytes($pluginSource)

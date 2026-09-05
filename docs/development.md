@@ -6,7 +6,7 @@ StalkShift is a Rust workspace for Windows x64. The toolchain is pinned in `rust
 
 ## Build and verify
 
-Close ETS2 and any running StalkShift bridge before rebuilding, probing the DLL or testing the installer. The mock DLL host must not connect to a live bridge.
+Close ETS2, ATS and any running StalkShift bridge before rebuilding, probing the DLL or testing the installer. The mock DLL host must not connect to a live bridge.
 
 ```powershell
 cargo fmt --all -- --check
@@ -15,10 +15,20 @@ cargo test --workspace --locked
 cargo build --release --workspace --locked
 python scripts/probe_plugin.py target/release/stalkshift_plugin.dll
 python scripts/package-release.py
-python scripts/test-installer.py target/dist/StalkShift-1.0.0-windows-x64.zip
+python scripts/test-installer.py target/dist/StalkShift-1.1.0-windows-x64.zip
 ```
 
-The installer tests use isolated fake game/profile folders under `target`, including paths with spaces, read-only controls, repeated installation, restoration, user edits, rollback and damaged packages. They never edit the real game. The Windows CI job runs these checks and uploads the player ZIP and its SHA-256 checksum.
+The installer tests use isolated fake ETS2/ATS folders under `target`, including paths with spaces, game selection, units, independent installs/removal, migration from 1.0, read-only controls, repeated installation, restoration, user edits, rollback and damaged packages. They never edit a real game. The DLL probe exercises both game IDs, rejects unknown IDs, and checks both initialization/shutdown orders. The Windows CI job runs these checks and uploads the player ZIP and its SHA-256 checksum.
+
+## Game support and cruise units
+
+The DLL accepts the official SDK identifiers `eut2` and `ats`, using the shared input ABI and truck telemetry channels. The same bridge and DLL serve both games; run one simulator at a time.
+
+The player installer writes `bin/win_x64/plugins/stalkshift-cruise-unit.txt` containing `kmh` or `mph`. The DLL resolves this relative to the game executable, not its working directory. With no valid setting, ETS2 defaults to km/h and ATS to mph. Both modes require the game to use a five-unit cruise step. SDK speeds remain SI values; only target rounding and expected step acknowledgements differ. Unit selection survives input resets without changing protocol v3.
+
+Install records are separate `install-ets2.json` and `install-ats.json` files under `%LOCALAPPDATA%\StalkShift`. Updating ETS2 migrates the old `install.json` record and preserves its backup references. The old record is retired so a 1.0 uninstaller cannot remove the new installation. Settings files and profiles edited after installation are preserved during uninstall.
+
+Automated ATS checks do not constitute in-game verification. No ATS gameplay acceptance was performed for 1.1.0.
 
 ## Components
 

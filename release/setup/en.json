@@ -1,10 +1,15 @@
 {
-  "title": "StalkShift 1.0",
-  "closeGame": "Close ETS2 completely and run this again.",
+  "title": "StalkShift 1.1",
+  "closeGame": "Close ETS2 and ATS completely and run this again.",
   "closeBridge": "Close the running StalkShift window first.",
-  "gamePath": "ETS2 folder, containing bin\\win_x64\\eurotrucks2.exe",
-  "gameFound": "ETS2 found",
-  "badGame": "This folder does not contain the Windows x64 ETS2 executable.",
+  "gamePath": "Game folder, opened through Steam > Manage > Browse local files",
+  "gameFound": "Game found",
+  "badGame": "This folder does not contain the selected game's Windows x64 executable.",
+  "chooseGameType": "Choose game number: 1 ETS2 / 2 ATS",
+  "gameChanged": "This game already has an installation in another folder. Uninstall that copy first.",
+  "oneGame": "Run only one truck simulator at a time. Close ETS2 or ATS before starting StalkShift.",
+  "cruiseUnits": "Choose the speed units used in this game. For automatic cruise adjustment, set the game's cruise step to 5 in those units. Default",
+  "settingsChanged": "Cruise settings were edited or their backup is unavailable. The settings file was left in place.",
   "badPackage": "Package is incomplete or its files do not match. Extract the entire release ZIP again.",
   "chooseGame": "Choose game folder number",
   "profiles": "Optional: remove duplicate MOZA stalk button bindings from one profile. Keyboard, wheel and pedal bindings stay in place.",
@@ -12,7 +17,7 @@
   "badChoice": "Invalid selection.",
   "changedProfile": "Direct MOZA button bindings removed",
   "noBindings": "No direct MOZA stalk button bindings found in this profile.",
-  "installed": "Installed. Connect MOZA by USB, select Multi function key switch direct in Pit House, then open Start.cmd and launch ETS2.",
+  "installed": "Installed. Connect MOZA by USB, select Multi function key switch direct in Pit House, then open Start.cmd and launch the selected game.",
   "backup": "Backup folder",
   "installFirst": "Run Install.cmd from this release before starting the bridge.",
   "noDevice": "MOZA stalks were not found. Check USB and Pit House. A wheel base alone is not the stalk device.",
@@ -24,5 +29,5 @@
   "profileChanged": "Profile was edited since installation. It was left as-is; the original is in the backup folder.",
   "pluginChanged": "Installed DLL differs from this installation record. Run Install.cmd for the current release before uninstalling.",
   "failed": "Operation failed",
-  "access": "If access was denied in the ETS2 folder, run Install.cmd or Uninstall.cmd as administrator. Start.cmd does not need administrator rights."
+  "access": "If access was denied in the game folder, run Install.cmd or Uninstall.cmd as administrator. Start.cmd does not need administrator rights."
 }

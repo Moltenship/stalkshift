@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Open-source MOZA stalk bridge for ETS2: HID discovery milestone"
+description = "Open-source MOZA stalk bridge for ETS2 and ATS"
 
 [dependencies]
 anyhow.workspace = true

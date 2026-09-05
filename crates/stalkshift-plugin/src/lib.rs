@@ -2,6 +2,7 @@
 //! Caller-owned SDK pointers are used only during the callback that supplied them.
 
 pub mod ffi;
+mod game;
 mod state;
 #[cfg(windows)]
 mod worker;
@@ -27,9 +28,14 @@ fn boundary(action: impl FnOnce() -> i32) -> i32 {
     })
 }
 
-unsafe fn is_ets2(common: &Common) -> bool {
+unsafe fn supported_game(common: &Common) -> Option<game::Game> {
     // SAFETY: SCS supplies a valid terminated game_id for the lifetime of init.
-    !common.game_id.is_null() && unsafe { CStr::from_ptr(common.game_id) } == c"eut2"
+    if common.game_id.is_null() {
+        None
+    } else {
+        // SAFETY: non-null SDK game_id is valid and terminated during init.
+        game::Game::from_id(unsafe { CStr::from_ptr(common.game_id) })
+    }
 }
 unsafe fn log(common: &Common, level: i32, message: &CStr) {
     if let Some(log) = common.log {
@@ -54,14 +60,17 @@ pub unsafe extern "system" fn scs_input_init(version: u32, params: *const InputP
         // SAFETY: version checked above; the caller guarantees the matching parameter layout.
         let params = unsafe { &*params };
         // SAFETY: common is part of the validated parameter object.
-        if !unsafe { is_ets2(&params.common) } {
+        let Some(game) = (unsafe { supported_game(&params.common) }) else {
             return UNSUPPORTED;
-        }
+        };
         let Some(register) = params.register_device else {
             return INVALID;
         };
         if INPUT_INITIALIZED.swap(true, Ordering::SeqCst) {
             return ALREADY_REGISTERED;
+        }
+        if let Ok(mut state) = shared().lock() {
+            state.gate.set_cruise_unit(game.installed_unit());
         }
         FAULT.store(false, Ordering::Relaxed);
         #[cfg(windows)]
@@ -203,9 +212,9 @@ pub unsafe extern "system" fn scs_telemetry_init(
         // SAFETY: both supported versions have the same documented layout.
         let params = unsafe { &*params };
         // SAFETY: common is part of caller's valid initialization parameters.
-        if !unsafe { is_ets2(&params.common) } {
+        let Some(game) = (unsafe { supported_game(&params.common) }) else {
             return UNSUPPORTED;
-        }
+        };
         let (
             Some(register_event),
             Some(unregister_event),
@@ -222,6 +231,9 @@ pub unsafe extern "system" fn scs_telemetry_init(
         };
         if TELEMETRY_INITIALIZED.swap(true, Ordering::SeqCst) {
             return ALREADY_REGISTERED;
+        }
+        if let Ok(mut state) = shared().lock() {
+            state.gate.set_cruise_unit(game.installed_unit());
         }
         let channels = [
             c"truck.lblinker",

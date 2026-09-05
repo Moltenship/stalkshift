@@ -283,7 +283,7 @@ dependencies = [
 
 [[package]]
 name = "stalkshift"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -296,7 +296,7 @@ dependencies = [
 
 [[package]]
 name = "stalkshift-capture"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "serde",
@@ -305,14 +305,14 @@ dependencies = [
 
 [[package]]
 name = "stalkshift-core"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "stalkshift-capture",
 ]
 
 [[package]]
 name = "stalkshift-hid"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "hidapi",
@@ -321,7 +321,7 @@ dependencies = [
 
 [[package]]
 name = "stalkshift-plugin"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "stalkshift-protocol",
  "tokio",
@@ -329,7 +329,7 @@ dependencies = [
 
 [[package]]
 name = "stalkshift-protocol"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "stalkshift-core",
  "tokio",

@@ -11,7 +11,7 @@ mod bridge;
 #[derive(Parser)]
 #[command(
     version,
-    about = "StalkShift — open MOZA stalk bridge and USB diagnostics for ETS2"
+    about = "StalkShift — open MOZA stalk bridge and USB diagnostics for ETS2 and ATS"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -41,7 +41,7 @@ enum Command {
     Inspect { file: PathBuf },
     /// Decode an existing capture with the measured direct-mode indicator profile.
     DecodeIndicators { file: PathBuf },
-    /// Connect the measured direct-mode MOZA controls to the StalkShift ETS2 plugin.
+    /// Connect the measured direct-mode MOZA controls to the StalkShift game plugin.
     Bridge {
         #[arg(long)]
         device: usize,

@@ -139,14 +139,25 @@ def probe(path):
     assert api.scs_input_init(0x20000, None) == -1
     assert api.scs_input_init(0x10000, None) == -2
     assert api.scs_telemetry_init(0x20000, None) == -1
+    for rejected in [None, b'', b'unknown', b'amtrucks']:
+        inputs.common.game_id = rejected
+        telemetry.common.game_id = rejected
+        assert api.scs_input_init(0x10000, c.byref(inputs)) == -1
+        assert api.scs_telemetry_init(0x10001, c.byref(telemetry)) == -1
+        assert not callbacks and not events and not channels
+    inputs.common.game_id = b'eut2'
+    telemetry.common.game_id = b'eut2'
     fail_second_channel = True
     assert api.scs_telemetry_init(0x10001, c.byref(telemetry)) == -4
     assert not events and not channels, 'failed init must roll back registrations'
     fail_second_channel = False
 
-    for cycle in range(3):
+    for cycle in range(6):
+        game_id = b'eut2' if cycle % 2 == 0 else b'ats'
+        inputs.common.game_id = game_id
+        telemetry.common.game_id = game_id
         # Exercise both API initialization and shutdown orders.
-        if cycle % 2:
+        if cycle % 3 == 1:
             assert api.scs_input_init(0x10000, c.byref(inputs)) == 0
             assert api.scs_telemetry_init(0x10000, c.byref(telemetry)) == 0
         else:
@@ -181,7 +192,7 @@ def probe(path):
         callback(3, None, context)
         assert callbacks['event'](c.byref(event), 1, None) == 0 and event.payload[0] == 0
         start = time.monotonic()
-        if cycle % 2:
+        if cycle % 3 == 1:
             api.scs_telemetry_shutdown()
             api.scs_input_shutdown()
         else:
@@ -191,7 +202,7 @@ def probe(path):
         events.clear()
         channels.clear()
     assert not failures, failures
-    print('PASS: x64 PE exports, ABI layouts, rollback, callbacks, 3 init/shutdown cycles')
+    print('PASS: x64 PE exports, ABI layouts, game rejection, rollback, callbacks, 6 ETS2/ATS init/shutdown cycles')
 
 
 if __name__ == '__main__':

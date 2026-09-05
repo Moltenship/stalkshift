@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 mod controls;
 pub use controls::*;
 mod actions;
+pub use actions::CruiseUnit;
 mod mist;
 
 #[cfg(windows)]
@@ -117,6 +118,7 @@ pub struct InputGate {
     mist: mist::Mist,
     wipers_on: Option<bool>,
     actions: actions::Actions,
+    cruise_unit: CruiseUnit,
     parking: Option<bool>,
     motion: [i32; 4],
 }
@@ -133,6 +135,7 @@ impl Default for InputGate {
             mist: mist::Mist::default(),
             wipers_on: None,
             actions: actions::Actions::default(),
+            cruise_unit: CruiseUnit::default(),
             parking: None,
             motion: UNKNOWN_MOTION,
         }
@@ -146,7 +149,13 @@ impl InputGate {
         self.last_received = None;
         self.desired = 0;
         self.mist.invalidate();
-        self.actions = actions::Actions::default();
+        self.actions = actions::Actions::with_unit(self.cruise_unit);
+    }
+    pub fn set_cruise_unit(&mut self, unit: CruiseUnit) {
+        if self.cruise_unit != unit {
+            self.cruise_unit = unit;
+            self.invalidate();
+        }
     }
     pub fn connect(&mut self, session: u64) {
         self.session = session;
@@ -221,6 +230,34 @@ impl InputGate {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn miles_configuration_survives_pause_disconnect_and_lease_expiry() {
+        let (mut gate, _, _) = setup();
+        gate.set_cruise_unit(CruiseUnit::Mph);
+        for _ in 0..3 {
+            gate.connect(9);
+            gate.set_ready(true);
+            gate.observe_driving(Some(false), [26822, 26822, 26000, 10]);
+            let now = Instant::now();
+            let request = Packet {
+                kind: Kind::Command,
+                motion: UNKNOWN_MOTION,
+                value: AUTO_TOGGLE,
+                session: gate.session,
+                sequence: 1,
+                epoch: gate.epoch,
+            };
+            assert!(gate.accept(request, now));
+            assert_eq!(
+                gate.outputs(now),
+                [false; INPUT_COUNT],
+                "60 mph already matches the limit"
+            );
+            gate.expire(now + LEASE);
+            gate.set_ready(false);
+            gate.disconnect();
+        }
+    }
 
     #[test]
     fn mist_waits_for_ack_then_stays_off_until_a_new_request() {

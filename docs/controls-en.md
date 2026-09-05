@@ -2,7 +2,7 @@
 
 [Installation and help](../README.md) · English · [Русский](controls-ru.md)
 
-This guide describes the assignments in version 1.0 with Pit House set to **Multi function key switch direct**. Keep StalkShift running while you play.
+These assignments apply to both ETS2 and ATS in version 1.1, with Pit House set to **Multi function key switch direct**. Keep StalkShift running while you play.
 
 ## Left stalk: indicators and lights
 
@@ -81,23 +81,25 @@ Use the **separate small cruise lever**, not the main right stalk. Its **ON/OFF 
 |---|---|
 | Rotate ON/OFF and release | Turn cruise on at the current speed, or turn active cruise off |
 | Pull towards you with cruise active | Cancel cruise |
-| Pull towards you with cruise inactive | Resume the previously saved speed, if ETS2 has one |
+| Pull towards you with cruise inactive | Resume the previously saved speed, if the game has one |
 | Move up | Increase the selected cruise speed |
 | Move down | Decrease the selected cruise speed |
 | Hold up or down | Continue changing the selected speed in steps |
 
-To start, drive on the road at about **40–50 km/h**, release the brake and clutch, rotate ON/OFF once and let it spring back. Release the accelerator. The truck should hold speed. Brake or use ON/OFF to cancel. ETS2 decides when cruise is available and how large each speed step is.
+To start, drive on the road at about **40–50 km/h or 30 mph**, release the brake and clutch, rotate ON/OFF once and let it spring back. Release the accelerator. The truck should hold speed. Brake or use ON/OFF to cancel. The game decides when cruise is available and how large each speed step is.
 
 If it does not engage, compare with the normal cruise key, usually **C**, under the same conditions. Cruise does not make a parked truck start driving. The main right stalk's pull movement sounds the horn; only the small cruise stalk's pull resumes or cancels cruise.
 
 ## Optional speed-limit cruise adjustment
 
-This mode changes the **speed selected for an already active cruise control** to match the road limit supplied by ETS2's navigation. It starts **off**.
+This mode changes the **speed selected for an already active cruise control** to match the road limit supplied by the game's navigation. It starts **off**.
 
-1. In ETS2, use kilometres and set the cruise adjustment step to **5 km/h**.
+1. In Install.cmd, choose the same speed units as in your game. Set the game's cruise adjustment step to **5 km/h** for kilometres, or **5 mph** for miles. Both units are supported in either game.
 2. Start normal cruise on the road. Make sure the navigator displays a speed limit.
 3. Turn and release the little spring switch with the circle and fog-light symbol beside the **left light ring**.
-4. StalkShift gradually changes the selected cruise speed toward the road limit, using a reachable 5 km/h step at or below that limit.
+4. StalkShift gradually changes the selected cruise speed toward the road limit, using a reachable five-unit step at or below that limit.
+
+If you change the game's speed units later, close the game and StalkShift and run Install.cmd again to update the choice. The installer suggests km/h for ETS2 and mph for ATS; it does not change your game settings.
 
 Turn the same switch again to disable the mode. Using a manual cruise control on the stalk also disables it. You can check its state in the StalkShift window: `auto=true` means on, `auto=false` means off. There is no separate in-game indicator for this mode.
 

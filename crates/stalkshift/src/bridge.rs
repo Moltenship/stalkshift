@@ -165,7 +165,7 @@ pub fn run(index: usize, seconds: Option<u64>) -> Result<()> {
             }
             if let Ok(mut state) = reader_state.lock() { state.reset(); }
         })?;
-        println!("StalkShift is running. Start ETS2 and enter the truck, then move each control to synchronize.");
+        println!("StalkShift is running. Start ETS2 or ATS and enter the truck, then move each control to synchronize.");
         println!("Indicators, light modes and front wipers are enabled. Horn, hazards, selector, parking brake and cruise are enabled. Ctrl+C stops the bridge; the plugin releases inputs on connection loss.");
         let expired = || seconds.is_some_and(|seconds| start.elapsed() >= Duration::from_secs(seconds));
         let result: Result<()> = async {
