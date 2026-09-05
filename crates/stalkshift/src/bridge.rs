@@ -184,7 +184,7 @@ pub fn run(index: usize, seconds: Option<u64>) -> Result<()> {
                     if let Err(error) = exchange { eprintln!("Game connection reset: {error}"); break; }
                 }
                 if let Ok(mut state) = state.lock() { state.disconnected(); }
-                let _ = server.disconnect();
+                server = pipe::reset_server(server, PIPE_NAME).await.context("recreate pipe after game disconnect")?;
             }
             Ok(())
         }.await;

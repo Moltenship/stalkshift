@@ -68,6 +68,8 @@ The minimal ABI declarations match the official SDK's x64 size/alignment asserti
 
 ## Manual acceptance
 
+On 2026-09-05, restarting the game exposed a reconnect loop: the reused named-pipe server could deliver buffered status frames from the previous client. The bridge now drops and recreates that server after a disconnect, with bounded recovery and first-instance protection. A Windows regression test leaves an old frame unread and verifies five distinct client sessions; it failed on the old implementation. The operator confirmed restored indicator and wiper control after restarting the bridge. The automatic recovery fix still needs a full game-restart acceptance check.
+
 On 2026-09-05, ETS2 1.60.1.7 loaded both StalkShift APIs. The first game test exposed reversed direction labels in the original HID recording. After correcting the decoder, fixture annotation and replay expectations together, the operator confirmed that physical left/right positions and centre cancellation matched the game. Logical indicator telemetry independently confirmed both directions and releases across repeated movements. The tested configuration was direct USB, "Multi function key switch direct", reported Pit House 1.4.0.30, separate firmware unknown.
 
 | Check | Result |

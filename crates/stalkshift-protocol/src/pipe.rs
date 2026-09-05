@@ -19,6 +19,24 @@ pub fn server(name: &str) -> io::Result<NamedPipeServer> {
         .create(name)
 }
 
+/// Reusing a disconnected Tokio pipe can retain user-space bytes from its old
+/// client. Drop the entire handle/buffer before accepting another session.
+pub async fn reset_server(old: NamedPipeServer, name: &str) -> io::Result<NamedPipeServer> {
+    let _ = old.disconnect();
+    drop(old);
+    let deadline = tokio::time::Instant::now() + IO_TIMEOUT;
+    loop {
+        // Give cancelled overlapped I/O and the old client time to close their
+        // handles. Keep first-instance protection even during recovery.
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        match server(name) {
+            Ok(server) => return Ok(server),
+            Err(error) if tokio::time::Instant::now() >= deadline => return Err(error),
+            Err(_) => {}
+        }
+    }
+}
+
 pub async fn send(pipe: &mut (impl AsyncWrite + Unpin), packet: Packet) -> io::Result<()> {
     tokio::time::timeout(IO_TIMEOUT, pipe.write_all(&packet.encode()))
         .await
@@ -60,6 +78,32 @@ mod tests {
             assert_eq!(receive(&mut client).await.unwrap().value, 1);
             drop(client);
             assert!(receive(&mut server).await.is_err());
+        });
+    }
+    #[test]
+    fn reconnect_discards_unread_previous_session() {
+        runtime().unwrap().block_on(async {
+            let name = format!(r"\\.\pipe\stalkshift-reconnect-test-{}", std::process::id());
+            let mut server = server(&name).unwrap();
+            for session in 1..=5 {
+                let _ = tokio::time::timeout(std::time::Duration::from_millis(1), server.connect())
+                    .await;
+                let mut client = ClientOptions::new().open(&name).unwrap();
+                server.connect().await.unwrap();
+                let packet = Packet {
+                    kind: Kind::Status,
+                    session,
+                    epoch: 1,
+                    sequence: 0,
+                    value: 1,
+                };
+                // Leave a second frame buffered when the client exits.
+                let bytes = [packet.encode(), packet.encode()].concat();
+                client.write_all(&bytes).await.unwrap();
+                assert_eq!(receive(&mut server).await.unwrap(), packet);
+                drop(client);
+                server = reset_server(server, &name).await.unwrap();
+            }
         });
     }
     #[test]
