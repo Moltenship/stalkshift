@@ -2,6 +2,13 @@
 
 use std::fmt;
 
+mod lights;
+pub use lights::{DirectLightDecoder, LightPosition};
+mod wipers;
+pub use wipers::{DirectWiperDecoder, WiperPosition};
+mod beams;
+pub use beams::DirectBeamDecoder;
+
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum IndicatorPosition {
     /// No observed position event in this session, or an invalid input.
@@ -16,6 +23,9 @@ pub enum IndicatorPosition {
 pub enum DecodeError {
     UnexpectedReportLength(usize),
     ConflictingIndicatorPulses,
+    ConflictingLightPulses,
+    ConflictingWiperPulses,
+    ConflictingBeamInputs,
 }
 
 impl fmt::Display for DecodeError {
@@ -26,6 +36,15 @@ impl fmt::Display for DecodeError {
             }
             Self::ConflictingIndicatorPulses => {
                 write!(output, "multiple indicator position pulses in one report")
+            }
+            Self::ConflictingLightPulses => {
+                write!(output, "multiple light-ring position pulses in one report")
+            }
+            Self::ConflictingWiperPulses => {
+                write!(output, "multiple wiper-wheel position pulses in one report")
+            }
+            Self::ConflictingBeamInputs => {
+                write!(output, "conflicting left-lever beam inputs in one report")
             }
         }
     }

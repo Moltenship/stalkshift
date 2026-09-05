@@ -80,6 +80,7 @@ def probe(path):
     channels = {}
     failures = []
     fail_second_channel = False
+    input_names = [b'lblinkerh', b'rblinkerh', b'lightoff', b'lightpark', b'lighton', b'wipers0', b'wipers1', b'wipers2', b'wipers3', b'lighthorn', b'hblight']
 
     @Log
     def log(level, text):
@@ -89,7 +90,7 @@ def probe(path):
     def register_device(pointer):
         device = pointer.contents
         names = [device.inputs[i].name for i in range(device.count)]
-        if device.kind != 2 or names != [b'lblinkerh', b'rblinkerh']:
+        if device.kind != 2 or names != input_names:
             failures.append('incorrect semantic device registration')
             return -7
         # Copy callback addresses; the registration structure itself is temporary.
@@ -157,7 +158,8 @@ def probe(path):
             callback(name, 0xFFFFFFFF, c.byref(value), context)
         callbacks['active'](1, None)
         event = Event()
-        for flags, expected_index in [(3, 0), (0, 1)]:
+        for expected_index in range(len(input_names)):
+            flags = 3 if expected_index == 0 else 0
             assert callbacks['event'](c.byref(event), flags, None) == 0
             assert event.index == expected_index and event.payload[0] == 0
         assert callbacks['event'](c.byref(event), 0, None) == -4

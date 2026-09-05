@@ -56,13 +56,8 @@ mod tests {
             };
             send(&mut client, packet).await.unwrap();
             assert_eq!(receive(&mut server).await.unwrap(), packet);
-            send(
-                &mut server,
-                packet.reply(stalkshift_core::IndicatorPosition::Left),
-            )
-            .await
-            .unwrap();
-            assert_eq!(receive(&mut client).await.unwrap().value, 2);
+            send(&mut server, packet.reply(1)).await.unwrap();
+            assert_eq!(receive(&mut client).await.unwrap().value, 1);
             drop(client);
             assert!(receive(&mut server).await.is_err());
         });

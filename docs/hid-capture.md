@@ -24,8 +24,8 @@ Use a distinct file and descriptive `--label` for each row. Start from a documen
 | `gear-selector` | Each D/N/R/P position in both directions |
 | `right-pull` | Pull/release in every mechanically available position |
 | `right-overtravel` | Push below D, hold, release |
-| `wiper-ring` | MIST/OFF/INT/LO/HI in both directions |
-| `rear-ring` | Each detent and spring-loaded action from each available baseline |
+| `wiper-wheel` | Small thumbwheel in the right stalk's rectangular recess beside MIST/OFF/INT/LO/HI; rotate through its positions in both directions |
+| `rear-ring` | Ring at the end of the right stalk marked REAR; each detent and spring-loaded action from each available baseline |
 | `cruise` | End button, pull, up and down, including holds |
 | `combinations` | Indicator + lights; selector + pull; other mechanically possible combinations |
 | `startup-left` | Connect with indicator already left; start recorder without moving, then move to centre |

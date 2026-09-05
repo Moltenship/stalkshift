@@ -58,3 +58,31 @@ cargo run --locked -p stalkshift -- decode-indicators fixtures/moza/direct-indic
 ```
 
 Expected transitions: right → centre → left → centre, twice. Seven core tests cover pulse release, duplicate reports, startup uncertainty, resets, invalid/conflicting inputs, unrelated buttons and this real capture.
+
+## Light ring, front-wiper thumbwheel and beam lever
+
+The next capture session used the same USB interface and direct mode. The operator confirmed that the light test rotated the left light ring. Unrecorded up/down movements of the right main lever were separate. For front wipers, use the small thumbwheel in the rectangular recess beside MIST/OFF/INT/LO/HI on the right main stalk, not the end ring marked REAR. See the [manufacturer photo](https://mozaracing.com/cdn/shop/files/MOZA-Multi-function-Stalks-4-scaled.jpg?v=1750067211&width=2200) and the reference bridge's [physical mapping](https://github.com/JacKJodel23/MOZA-Truck-Stalk-Bridge/blob/main/docs/STALK_MAPPING_EN.md).
+
+| Control | Report prefix (remaining bytes zero) | Observed behavior |
+|---|---|---|
+| Light ring OFF | `01 00 00` | Approximately 150 ms position pulse |
+| Parking lights | `02 00 00` | Approximately 150 ms position pulse |
+| Low beams | `04 00 00` | Approximately 150 ms position pulse |
+| Front wiper MIST | `00 20 00` | Position pulse; zero does not mean leaving MIST |
+| Front wiper OFF | `00 40 00` | Position pulse |
+| Front wiper INT | `00 80 00` | Position pulse |
+| Front wiper LO | `00 00 01` | Position pulse |
+| Front wiper HI | `00 00 02` | Position pulse |
+| Left lever towards driver | `20 00 00` | Held until release |
+| Release from towards driver | `10 00 00`, then zero | Release pulse |
+| Left lever away from driver | `08 00 00` | Held until release to zero |
+
+The beam lever was reported to return by itself rather than remaining latched. Unlike the position decoders, beam holds are released when their bits clear. Startup/reconnect requires a neutral beam report before a new press can act.
+
+Reviewed captures preserve every report and timestamp:
+
+- [Light ring](../fixtures/moza/direct-light-ring.jsonl): 456 reports over 90 seconds. Parking → low → parking → off, twice.
+- [Front-wiper thumbwheel](../fixtures/moza/direct-wiper-wheel.jsonl): 614 reports over 120 seconds. The operator reported slips in the first pass. The second pass cleanly records INT → LO → HI → LO → INT → OFF → MIST; its final return to OFF happened after recording ended. The fixture label records these limitations, and replay must finish in MIST rather than inventing the missing OFF.
+- [Beam lever](../fixtures/moza/direct-beam-lever.jsonl): 610 reports over 120 seconds. Two towards-driver holds and three away-driver holds were observed, with intervening releases. The file also contains light-ring movements. The label describes the requested two-pass procedure; the replay test checks the actual extra press and all releases.
+
+These captures establish hardware events; a HID replay alone does not verify game modes or a complete single MIST sweep. See [game acceptance](game-integration.md).

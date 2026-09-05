@@ -7,9 +7,10 @@ mod state;
 mod worker;
 
 use ffi::*;
+use stalkshift_protocol::{CHANNEL_COUNT, INPUT_COUNT, INPUT_NAMES};
 use state::{Dispatch, GENERATION, INPUT_ACTIVE, OBSERVED, RUNNING, TELEMETRY_INSTALLED, shared};
 use std::cell::RefCell;
-use std::ffi::{CStr, c_char, c_void};
+use std::ffi::{CStr, CString, c_char, c_void};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
@@ -68,25 +69,24 @@ pub unsafe extern "system" fn scs_input_init(version: u32, params: *const InputP
             INPUT_INITIALIZED.store(false, Ordering::SeqCst);
             return ERROR;
         }
-        let inputs = [
-            Input {
-                name: c"lblinkerh".as_ptr(),
-                display_name: c"StalkShift Left Indicator".as_ptr(),
+        let names: Vec<_> = INPUT_NAMES
+            .iter()
+            .map(|name| CString::new(*name).expect("static input name"))
+            .collect();
+        let inputs: Vec<_> = names
+            .iter()
+            .map(|name| Input {
+                name: name.as_ptr(),
+                display_name: name.as_ptr(),
                 value_type: BOOL,
                 padding: 0,
-            },
-            Input {
-                name: c"rblinkerh".as_ptr(),
-                display_name: c"StalkShift Right Indicator".as_ptr(),
-                value_type: BOOL,
-                padding: 0,
-            },
-        ];
+            })
+            .collect();
         let device = InputDevice {
             name: c"stalkshift".as_ptr(),
             display_name: c"StalkShift".as_ptr(),
             device_type: 2,
-            input_count: 2,
+            input_count: INPUT_COUNT as u32,
             inputs: inputs.as_ptr(),
             context: std::ptr::null_mut(),
             active: Some(active_callback),
@@ -109,7 +109,7 @@ pub unsafe extern "system" fn scs_input_init(version: u32, params: *const InputP
             log(
                 &params.common,
                 0,
-                c"[StalkShift] Input 1.00 initialized: lblinkerh / rblinkerh",
+                c"[StalkShift] Input 1.00 initialized: indicators, lights, beams and wipers",
             );
         }
         OK
@@ -160,14 +160,14 @@ unsafe extern "system" fn input_callback(
                 let desired = if let Ok(mut state) = shared().try_lock() {
                     state.refresh();
                     let outputs = if FAULT.load(Ordering::Relaxed) {
-                        [false; 2]
+                        [false; INPUT_COUNT]
                     } else {
                         state.gate.outputs(Instant::now())
                     };
                     state.sent = outputs;
                     outputs
                 } else {
-                    [false; 2]
+                    [false; INPUT_COUNT]
                 };
                 dispatch.begin(desired);
             }
@@ -223,7 +223,14 @@ pub unsafe extern "system" fn scs_telemetry_init(
         if TELEMETRY_INITIALIZED.swap(true, Ordering::SeqCst) {
             return ALREADY_REGISTERED;
         }
-        let channels = [c"truck.lblinker", c"truck.rblinker"];
+        let channels = [
+            c"truck.lblinker",
+            c"truck.rblinker",
+            c"truck.light.parking",
+            c"truck.light.beam.low",
+            c"truck.wipers",
+            c"truck.light.beam.high",
+        ];
         let mut events_registered = Vec::new();
         let mut channels_registered = Vec::new();
         let result = (|| {
@@ -282,7 +289,7 @@ pub unsafe extern "system" fn scs_telemetry_init(
             log(
                 &params.common,
                 0,
-                c"[StalkShift] Telemetry initialized: logical indicators and pause state",
+                c"[StalkShift] Telemetry initialized: indicators, lights, wipers and pause state",
             );
         }
         OK
@@ -323,7 +330,7 @@ unsafe extern "system" fn telemetry_channel(
 ) {
     boundary(|| {
         let index = context as usize;
-        if index > 1 {
+        if index >= CHANNEL_COUNT {
             return INVALID;
         }
         let observed = if value.is_null() {

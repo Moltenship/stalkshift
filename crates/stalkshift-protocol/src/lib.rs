@@ -1,23 +1,18 @@
 use std::io;
 use std::time::{Duration, Instant};
 
-use stalkshift_core::IndicatorPosition;
+mod controls;
+pub use controls::*;
+mod mist;
 
 #[cfg(windows)]
 pub mod pipe;
 
-pub const PIPE_NAME: &str = r"\\.\pipe\stalkshift-indicators-v1";
-pub const FRAME_SIZE: usize = 32;
+pub const PIPE_NAME: &str = r"\\.\pipe\stalkshift-controls-v2";
+pub const FRAME_SIZE: usize = 40;
 pub const LEASE: Duration = Duration::from_millis(600);
 pub const IO_TIMEOUT: Duration = Duration::from_millis(300);
 pub const INTERVAL: Duration = Duration::from_millis(50);
-pub const READY: u8 = 1;
-pub const LEFT_VALID: u8 = 2;
-pub const RIGHT_VALID: u8 = 4;
-pub const LEFT_ON: u8 = 8;
-pub const RIGHT_ON: u8 = 16;
-pub const LEFT_SENT: u8 = 32;
-pub const RIGHT_SENT: u8 = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
@@ -29,7 +24,7 @@ pub enum Kind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Packet {
     pub kind: Kind,
-    pub value: u8,
+    pub value: u32,
     pub session: u64,
     pub sequence: u64,
     pub epoch: u64,
@@ -39,12 +34,12 @@ impl Packet {
     pub fn encode(self) -> [u8; FRAME_SIZE] {
         let mut bytes = [0; FRAME_SIZE];
         bytes[..4].copy_from_slice(b"STSF");
-        bytes[4..6].copy_from_slice(&1_u16.to_le_bytes());
+        bytes[4..6].copy_from_slice(&2_u16.to_le_bytes());
         bytes[6] = self.kind as u8;
-        bytes[7] = self.value;
-        bytes[8..16].copy_from_slice(&self.session.to_le_bytes());
-        bytes[16..24].copy_from_slice(&self.sequence.to_le_bytes());
-        bytes[24..32].copy_from_slice(&self.epoch.to_le_bytes());
+        bytes[8..12].copy_from_slice(&self.value.to_le_bytes());
+        bytes[16..24].copy_from_slice(&self.session.to_le_bytes());
+        bytes[24..32].copy_from_slice(&self.sequence.to_le_bytes());
+        bytes[32..40].copy_from_slice(&self.epoch.to_le_bytes());
         bytes
     }
 
@@ -55,7 +50,11 @@ impl Packet {
                 "invalid StalkShift protocol frame",
             )
         };
-        if &bytes[..4] != b"STSF" || bytes[4..6] != [1, 0] {
+        if &bytes[..4] != b"STSF"
+            || bytes[4..6] != [2, 0]
+            || bytes[7] != 0
+            || bytes[12..16] != [0; 4]
+        {
             return Err(invalid());
         }
         let kind = match bytes[6] {
@@ -63,17 +62,20 @@ impl Packet {
             2 => Kind::Command,
             _ => return Err(invalid()),
         };
-        if (kind == Kind::Command && bytes[7] > 3) || (kind == Kind::Status && bytes[7] > 127) {
+        let value = u32::from_le_bytes(bytes[8..12].try_into().expect("fixed value field"));
+        if (kind == Kind::Command && !valid_inputs(value))
+            || (kind == Kind::Status && value & !STATUS_MASK != 0)
+        {
             return Err(invalid());
         }
         let read =
             |offset| u64::from_le_bytes(bytes[offset..offset + 8].try_into().expect("fixed field"));
         let packet = Self {
             kind,
-            value: bytes[7],
-            session: read(8),
-            sequence: read(16),
-            epoch: read(24),
+            value,
+            session: read(16),
+            sequence: read(24),
+            epoch: read(32),
         };
         if packet.session == 0 || packet.epoch == 0 {
             return Err(invalid());
@@ -81,21 +83,12 @@ impl Packet {
         Ok(packet)
     }
 
-    pub fn reply(self, position: IndicatorPosition) -> Self {
+    pub fn reply(self, inputs: u32) -> Self {
         Self {
             kind: Kind::Command,
-            value: encode_position(position),
+            value: inputs,
             ..self
         }
-    }
-}
-
-pub fn encode_position(position: IndicatorPosition) -> u8 {
-    match position {
-        IndicatorPosition::Unknown => 0,
-        IndicatorPosition::Centre => 1,
-        IndicatorPosition::Left => 2,
-        IndicatorPosition::Right => 3,
     }
 }
 
@@ -107,7 +100,9 @@ pub struct InputGate {
     ready: bool,
     sequence: Option<u64>,
     last_received: Option<Instant>,
-    desired: u8,
+    desired: u32,
+    mist: mist::Mist,
+    wipers_on: Option<bool>,
 }
 
 impl Default for InputGate {
@@ -119,6 +114,8 @@ impl Default for InputGate {
             sequence: None,
             last_received: None,
             desired: 0,
+            mist: mist::Mist::default(),
+            wipers_on: None,
         }
     }
 }
@@ -129,6 +126,7 @@ impl InputGate {
         self.sequence = None;
         self.last_received = None;
         self.desired = 0;
+        self.mist.invalidate();
     }
     pub fn connect(&mut self, session: u64) {
         self.session = session;
@@ -161,7 +159,7 @@ impl InputGate {
             || packet.session == 0
             || packet.session != self.session
             || packet.epoch != self.epoch
-            || packet.value > 3
+            || !valid_inputs(packet.value)
             || self
                 .sequence
                 .is_some_and(|sequence| packet.sequence <= sequence)
@@ -171,20 +169,122 @@ impl InputGate {
         self.sequence = Some(packet.sequence);
         self.last_received = Some(now);
         self.desired = if self.ready { packet.value } else { 0 };
+        if self.desired & MIST_REQUEST == 0 {
+            self.mist.invalidate();
+        }
         true
     }
-    pub fn outputs(&mut self, now: Instant) -> [bool; 2] {
+    pub fn observe_wipers(&mut self, observed: Option<bool>) {
+        self.wipers_on = observed;
+    }
+    /// Call once per input frame. MIST waits for wiper telemetry between phases.
+    pub fn outputs(&mut self, now: Instant) -> [bool; INPUT_COUNT] {
         self.expire(now);
-        if !self.ready || self.session == 0 {
-            return [false; 2];
-        }
-        [self.desired == 2, self.desired == 3]
+        let desired = if self.ready && self.session != 0 {
+            self.desired
+        } else {
+            0
+        };
+        let desired = self.mist.apply(desired, self.wipers_on, now);
+        std::array::from_fn(|index| desired & (1 << index) != 0)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mist_waits_for_ack_then_stays_off_until_a_new_request() {
+        let (mut gate, mut packet, now) = setup();
+        packet.value = MIST_REQUEST | (1 << 4);
+        gate.accept(packet, now);
+        gate.observe_wipers(Some(false));
+        assert!(gate.outputs(now)[5]);
+        assert_eq!(
+            gate.outputs(now),
+            std::array::from_fn(|index| index == 4 || index == 7)
+        );
+        gate.observe_wipers(Some(true));
+        assert!(gate.outputs(now)[5]);
+        gate.observe_wipers(Some(false));
+        for _ in 0..20 {
+            packet.sequence += 1;
+            gate.accept(packet, now);
+            assert_eq!(
+                gate.outputs(now),
+                std::array::from_fn(|index| index == 4 || index == 5)
+            );
+        }
+        packet.sequence += 1;
+        packet.value = 1 << 5;
+        gate.accept(packet, now);
+        packet.sequence += 1;
+        packet.value = MIST_REQUEST;
+        gate.accept(packet, now);
+        assert!(gate.outputs(now)[5]);
+        assert!(gate.outputs(now)[7], "fresh MIST entry must trigger again");
+    }
+
+    #[test]
+    fn interrupted_mist_parks_at_next_callback_without_replaying_the_wipe() {
+        for interrupt in [0, 1, 2] {
+            let (mut gate, mut packet, now) = setup();
+            packet.value = MIST_REQUEST;
+            gate.accept(packet, now);
+            gate.observe_wipers(Some(false));
+            assert!(gate.outputs(now)[5]);
+            assert!(gate.outputs(now)[7]);
+            match interrupt {
+                0 => gate.disconnect(),
+                1 => gate.set_ready(false),
+                _ => gate.expire(now + LEASE),
+            }
+            assert_eq!(
+                gate.outputs(now + LEASE),
+                std::array::from_fn(|index| index == 5)
+            );
+            assert_eq!(gate.outputs(now + LEASE), [false; INPUT_COUNT]);
+        }
+    }
+
+    #[test]
+    fn conflicting_modes_are_rejected_and_all_groups_expire_together() {
+        let (mut gate, mut packet, now) = setup();
+        packet.value = 1 | light_inputs(stalkshift_core::LightPosition::LowBeam);
+        assert!(gate.accept(packet, now));
+        assert_eq!(
+            gate.outputs(now),
+            std::array::from_fn(|index| index == 0 || index == 4)
+        );
+        for invalid in [
+            3,
+            (1 << 2) | (1 << 4),
+            1 << (INPUT_COUNT + 1),
+            MIST_REQUEST | (1 << 5),
+        ] {
+            packet.value = invalid;
+            packet.sequence += 1;
+            assert!(Packet::decode(&packet.encode()).is_err());
+            assert!(!gate.accept(packet, now));
+        }
+        assert_eq!(gate.outputs(now + LEASE), [false; INPUT_COUNT]);
+    }
+
+    #[test]
+    fn telemetry_distinguishes_unknown_off_and_sent_input() {
+        let mut telemetry = [None; CHANNEL_COUNT];
+        telemetry[0] = Some(false);
+        telemetry[2] = Some(true);
+        let mut sent = [false; INPUT_COUNT];
+        sent[4] = true;
+        let value = status_value(true, &telemetry, &sent);
+        assert_eq!(observed(value, 0), Some(false));
+        assert_eq!(observed(value, 1), None);
+        assert_eq!(observed(value, 2), Some(true));
+        assert_ne!(value & sent_bit(4), 0);
+        assert_eq!(value & !STATUS_MASK, 0);
+    }
 
     fn setup() -> (InputGate, Packet, Instant) {
         let mut gate = InputGate::default();
@@ -195,7 +295,7 @@ mod tests {
             session: 42,
             epoch: gate.epoch,
             sequence: 0,
-            value: 2,
+            value: 1,
         };
         (gate, packet, Instant::now())
     }
@@ -204,8 +304,8 @@ mod tests {
         let (_, packet, _) = setup();
         let bytes = packet.encode();
         assert_eq!(Packet::decode(&bytes).unwrap(), packet);
-        assert_eq!(&bytes[8..16], &[42, 0, 0, 0, 0, 0, 0, 0]);
-        for (offset, value) in [(0, 0), (4, 2), (6, 3), (7, 255), (8, 0)] {
+        assert_eq!(&bytes[16..24], &[42, 0, 0, 0, 0, 0, 0, 0]);
+        for (offset, value) in [(0, 0), (4, 1), (6, 3), (7, 255), (8, 3), (12, 1), (16, 0)] {
             let mut invalid = bytes;
             invalid[offset] = value;
             assert!(Packet::decode(&invalid).is_err());
@@ -215,12 +315,12 @@ mod tests {
     fn pause_requires_new_epoch_and_never_replays_held_input() {
         let (mut gate, mut packet, now) = setup();
         assert!(gate.accept(packet, now));
-        assert_eq!(gate.outputs(now), [true, false]);
+        assert_eq!(gate.outputs(now), std::array::from_fn(|index| index == 0));
         gate.set_ready(false);
         gate.set_ready(true);
         packet.sequence += 1;
         assert!(!gate.accept(packet, now));
-        assert_eq!(gate.outputs(now), [false; 2]);
+        assert_eq!(gate.outputs(now), [false; INPUT_COUNT]);
         packet.epoch = gate.epoch;
         assert!(gate.accept(packet, now));
     }
@@ -228,7 +328,7 @@ mod tests {
     fn heartbeat_expiry_rejects_delayed_packets_until_new_epoch() {
         let (mut gate, mut packet, now) = setup();
         gate.accept(packet, now);
-        assert_eq!(gate.outputs(now + LEASE), [false; 2]);
+        assert_eq!(gate.outputs(now + LEASE), [false; INPUT_COUNT]);
         packet.sequence += 1;
         assert!(!gate.accept(packet, now + LEASE));
         packet.epoch = gate.epoch;
@@ -241,7 +341,7 @@ mod tests {
         assert!(gate.accept(packet, now));
         assert!(!gate.accept(packet, now));
         gate.disconnect();
-        assert_eq!(gate.outputs(now), [false; 2]);
+        assert_eq!(gate.outputs(now), [false; INPUT_COUNT]);
         gate.connect(43);
         assert!(!gate.accept(packet, now));
     }
@@ -249,10 +349,10 @@ mod tests {
     fn unknown_and_centre_release_both_inputs() {
         let (mut gate, mut packet, now) = setup();
         for (sequence, value, expected) in [
-            (0, 2, [true, false]),
-            (1, 0, [false, false]),
-            (2, 3, [false, true]),
-            (3, 1, [false, false]),
+            (0, 1, std::array::from_fn(|index| index == 0)),
+            (1, 0, [false; INPUT_COUNT]),
+            (2, 2, std::array::from_fn(|index| index == 1)),
+            (3, 0, [false; INPUT_COUNT]),
         ] {
             packet.sequence = sequence;
             packet.value = value;

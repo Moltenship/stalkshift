@@ -1,8 +1,10 @@
 use anyhow::{Context, Result, ensure};
-use stalkshift_core::{DirectIndicatorDecoder, IndicatorPosition};
+use stalkshift_core::{
+    DirectBeamDecoder, DirectIndicatorDecoder, DirectLightDecoder, DirectWiperDecoder,
+};
 use stalkshift_protocol::{
-    Kind, LEFT_ON, LEFT_SENT, LEFT_VALID, PIPE_NAME, Packet, READY, RIGHT_ON, RIGHT_SENT,
-    RIGHT_VALID, pipe,
+    CHANNEL_NAMES, FLASH_INPUT, HIGH_BEAM_INPUT, INPUT_NAMES, Kind, PIPE_NAME, Packet, READY,
+    indicator_inputs, light_inputs, observed, pipe, sent_bit, wiper_inputs,
 };
 use std::io;
 use std::sync::{
@@ -13,22 +15,59 @@ use std::time::{Duration, Instant};
 
 const HID_LEASE: Duration = Duration::from_secs(1);
 
+fn print_status(status: Packet) {
+    let telemetry: Vec<_> = CHANNEL_NAMES
+        .iter()
+        .enumerate()
+        .map(|(index, name)| {
+            let state = match observed(status.value, index) {
+                None => "unknown",
+                Some(true) => "on",
+                Some(false) => "off",
+            };
+            format!("{name}={state}")
+        })
+        .collect();
+    let sent: Vec<_> = INPUT_NAMES
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| status.value & sent_bit(*index) != 0)
+        .map(|(_, name)| *name)
+        .collect();
+    println!(
+        "Game: ready={} {} | plugin inputs: {}",
+        status.value & READY != 0,
+        telemetry.join(" "),
+        if sent.is_empty() {
+            "none".into()
+        } else {
+            sent.join(", ")
+        }
+    );
+}
+
 #[derive(Default)]
 struct BridgeState {
     decoder: DirectIndicatorDecoder,
+    lights: DirectLightDecoder,
+    wipers: DirectWiperDecoder,
+    beams: DirectBeamDecoder,
     last_report: Option<Instant>,
     binding: Option<(u64, u64)>,
 }
 impl BridgeState {
     fn reset(&mut self) {
         self.decoder.reset();
+        self.lights.reset();
+        self.wipers.reset();
+        self.beams.reset();
         self.last_report = None;
     }
     fn disconnected(&mut self) {
         self.reset();
         self.binding = None;
     }
-    fn feed(&mut self, bytes: &[u8], now: Instant) -> Result<Option<IndicatorPosition>> {
+    fn feed(&mut self, bytes: &[u8], now: Instant) -> Result<bool> {
         if self
             .last_report
             .is_some_and(|last| now.saturating_duration_since(last) >= HID_LEASE)
@@ -36,7 +75,11 @@ impl BridgeState {
             self.reset();
         }
         self.last_report = Some(now);
-        Ok(self.decoder.feed(bytes)?)
+        let indicators = self.decoder.feed(bytes)?.is_some();
+        let lights = self.lights.feed(bytes)?.is_some();
+        let wipers = self.wipers.feed(bytes)?.is_some();
+        let beams = self.beams.feed(bytes)?;
+        Ok(indicators || lights || wipers || beams)
     }
     fn reply(&mut self, status: Packet, now: Instant) -> Packet {
         let binding = Some((status.session, status.epoch));
@@ -44,7 +87,7 @@ impl BridgeState {
             self.reset();
             self.binding = binding;
             println!(
-                "Game connection/state changed. Move the indicator through centre to synchronize."
+                "Game connection/state changed. Move each control to synchronize its position."
             );
         }
         if self
@@ -54,9 +97,13 @@ impl BridgeState {
             self.reset();
         }
         let desired = if status.value & READY != 0 {
-            self.decoder.position()
+            indicator_inputs(self.decoder.position())
+                | light_inputs(self.lights.position())
+                | wiper_inputs(self.wipers.position())
+                | (u32::from(self.beams.flash()) * FLASH_INPUT)
+                | (u32::from(self.beams.high_beam_pressed()) * HIGH_BEAM_INPUT)
         } else {
-            IndicatorPosition::Unknown
+            0
         };
         status.reply(desired)
     }
@@ -86,15 +133,15 @@ pub fn run(index: usize, seconds: Option<u64>) -> Result<()> {
                         if matching.len() == 1 { handle = matching[0].open().ok(); }
                     }
                     if handle.is_none() { std::thread::sleep(Duration::from_millis(200)); continue; }
-                    println!("MOZA reconnected. Move the indicator through centre to synchronize.");
+                    println!("MOZA reconnected. Move each control to synchronize its position.");
                 }
                 match handle.as_ref().expect("handle opened above").read_timeout(&mut buffer, 50) {
                     Ok(0) => {},
                     Ok(size) => {
                         let Ok(mut state) = reader_state.lock() else { break };
                         match state.feed(&buffer[..size], Instant::now()) {
-                            Ok(Some(position)) => println!("Stalk: {position:?}"),
-                            Ok(None) => {},
+                            Ok(true) => println!("Stalk: indicator={:?} lights={:?} wipers={:?} flash={} high-beam-press={}", state.decoder.position(), state.lights.position(), state.wipers.position(), state.beams.flash(), state.beams.high_beam_pressed()),
+                            Ok(false) => {},
                             Err(error) => { state.reset(); eprintln!("Invalid HID input: {error}"); }
                         }
                     }
@@ -106,8 +153,8 @@ pub fn run(index: usize, seconds: Option<u64>) -> Result<()> {
             }
             if let Ok(mut state) = reader_state.lock() { state.reset(); }
         })?;
-        println!("StalkShift indicator bridge is running. Start ETS2 and enter the truck, then move the stalk through centre.");
-        println!("Only indicators are enabled. Ctrl+C stops the bridge; the plugin releases inputs on connection loss.");
+        println!("StalkShift is running. Start ETS2 and enter the truck, then move each control to synchronize.");
+        println!("Indicators, light modes and front wipers are enabled. Ctrl+C stops the bridge; the plugin releases inputs on connection loss.");
         let expired = || seconds.is_some_and(|seconds| start.elapsed() >= Duration::from_secs(seconds));
         let result: Result<()> = async {
             while !expired() {
@@ -127,9 +174,7 @@ pub fn run(index: usize, seconds: Option<u64>) -> Result<()> {
                         ensure!(previous_sequence.is_none_or(|sequence| status.sequence > sequence), "out-of-order plugin status");
                         connection_session = Some(status.session); previous_sequence = Some(status.sequence);
                         if previous_status != Some(status.value) {
-                            let observed = |valid, on| if status.value & valid == 0 { "unknown" } else if status.value & on != 0 { "on" } else { "off" };
-                            println!("Game: ready={} left={} right={} | plugin inputs left={} right={}", status.value & READY != 0,
-                                observed(LEFT_VALID, LEFT_ON), observed(RIGHT_VALID, RIGHT_ON), status.value & LEFT_SENT != 0, status.value & RIGHT_SENT != 0);
+                            print_status(status);
                             previous_status = Some(status.value);
                         }
                         let reply = state.lock().map_err(|_| io::Error::other("HID state poisoned"))?.reply(status, Instant::now());
@@ -153,6 +198,32 @@ pub fn run(index: usize, seconds: Option<u64>) -> Result<()> {
 mod tests {
     use super::*;
     #[test]
+    fn controls_latch_independently_and_connection_change_clears_every_group() {
+        let mut state = BridgeState::default();
+        let now = Instant::now();
+        let mut status = Packet {
+            kind: Kind::Status,
+            value: READY,
+            session: 1,
+            epoch: 1,
+            sequence: 0,
+        };
+        assert_eq!(state.reply(status, now).value, 0);
+        state.feed(&[4, 0, 0, 0, 0, 0, 0, 0], now).unwrap();
+        state.feed(&[0; 8], now).unwrap();
+        assert_eq!(state.reply(status, now).value, 1 << 4);
+        state.feed(&[0, 2, 0, 0, 0, 0, 0, 0], now).unwrap();
+        assert_eq!(state.reply(status, now).value, (1 << 4) | 1);
+        status.epoch += 1;
+        assert_eq!(state.reply(status, now).value, 0);
+        state.feed(&[0, 1, 0, 0, 0, 0, 0, 0], now).unwrap();
+        assert_eq!(
+            state.reply(status, now).value,
+            0,
+            "indicator re-arm must not restore stale lights"
+        );
+    }
+    #[test]
     fn handshake_and_usb_silence_require_new_physical_event() {
         let mut state = BridgeState::default();
         let now = Instant::now();
@@ -166,7 +237,7 @@ mod tests {
         state.feed(&[0, 2, 0, 0, 0, 0, 0, 0], now).unwrap();
         assert_eq!(state.reply(status, now).value, 0);
         state.feed(&[0, 2, 0, 0, 0, 0, 0, 0], now).unwrap();
-        assert_eq!(state.reply(status, now).value, 2);
+        assert_eq!(state.reply(status, now).value, 1);
         assert_eq!(state.reply(status, now + HID_LEASE).value, 0);
         state.feed(&[0; 8], now + HID_LEASE).unwrap();
         assert_eq!(state.reply(status, now + HID_LEASE).value, 0);

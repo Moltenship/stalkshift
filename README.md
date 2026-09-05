@@ -2,9 +2,9 @@
 
 An open-source Rust bridge between **MOZA Multi-function Stalks** and **Euro Truck Simulator 2** on Windows.
 
-**Status: indicator bridge prototype, tested in ETS2 1.60.1.7.** Left/right activation, centre cancellation, pause/resume and USB reconnection have been confirmed on one real MOZA device in direct mode, both visually and through game telemetry. A Rust DLL connects the bridge to the official SCS Input and Telemetry APIs. Broader acceptance is still in progress; lights, wipers, cruise and gears are not implemented yet. The first complete version still targets all controls described in [the plan](PLAN.md), including D/N/R/P and optional speed-limit cruise adjustment.
+**Status: control bridge prototype for ETS2 1.60.1.7.** Indicators, the light ring, flash/high beams and front wipers are implemented for the measured MOZA direct mode. Indicators, pause/USB recovery, light modes and beam operation have been confirmed in the game; wiper acceptance is in progress. A Rust DLL connects through the official SCS Input and Telemetry APIs. Horn, hazards, cruise and gears are not implemented yet. The first complete version still targets all controls described in [the plan](PLAN.md), including D/N/R/P and optional speed-limit cruise adjustment.
 
-## Try indicators in ETS2
+## Try the controls in ETS2
 
 ```powershell
 cargo build --release --workspace --locked
@@ -18,7 +18,7 @@ Close ETS2, install the plugin, and start the bridge:
 .\target\release\stalkshift.exe bridge --device 0
 ```
 
-Enter the truck and wait for `ready=true`, then move the indicator through centre to synchronize. This initial prototype requires re-arming after pause/reconnect because the measured device mode sends movement pulses, not persistent positions. See [game integration](docs/game-integration.md) for prerequisites, disconnect behavior and acceptance checks.
+Enter the truck and wait for `ready=true`, then move each position control to synchronize it. Release the beam lever before pressing it. The indicator, light ring and front-wiper thumbwheel send movement pulses, so each requires re-arming after pause/reconnect. The small front-wiper thumbwheel is beside MIST/OFF/INT/LO/HI on the right stalk; the end ring marked REAR is a different control. See [game integration](docs/game-integration.md) for assignments, disconnect behavior and acceptance checks. Install the matching application and DLL together: this build uses protocol v2 and does not connect to the old indicator-only DLL.
 
 ## Try the diagnostics
 
@@ -69,11 +69,11 @@ cargo test --workspace --locked
 | `stalkshift` | CLI commands and recording workflow |
 | `stalkshift-hid` | Windows HID discovery and read-only report capture |
 | `stalkshift-capture` | Versioned JSONL format and streaming offline validation |
-| `stalkshift-core` | Measured direct-mode indicator decoder and state machine |
+| `stalkshift-core` | Measured direct-mode indicator, light-ring, wiper-wheel and beam decoders |
 | `stalkshift-protocol` | Bounded named-pipe protocol, sessions, readiness epochs and input leases |
-| `stalkshift-plugin` | Windows x64 DLL exporting SCS Input and Telemetry APIs |
+| `stalkshift-plugin` | Windows x64 SCS Input/Telemetry DLL with bounded input dispatch |
 
-Next: finish in-game indicator acceptance and record the remaining controls. HID access and IPC waits stay outside game callbacks. The DLL is probed as a real PE binary against a mock SCS host; this checks ABI layout, callback registration, failure rollback and repeated initialization/shutdown independently of the game.
+The core tests replay all four reviewed hardware captures, including the operator's documented corrections. Protocol tests cover independent controls, invalid/conflicting commands, session changes, lease expiry and MIST interruption. HID access and IPC waits stay outside game callbacks. The actual DLL is probed against a mock SCS host for ABI layout, callback registration, failure rollback and repeated initialization/shutdown. Remaining game checks are recorded in [the acceptance table](docs/game-integration.md).
 
 ## Project scope
 
