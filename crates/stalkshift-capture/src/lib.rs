@@ -64,6 +64,16 @@ pub struct Summary {
 /// Validate incrementally so a long capture need not fit in memory.
 /// A missing footer is an error: interrupted captures must not appear complete.
 pub fn inspect(mut input: impl BufRead) -> Result<Summary> {
+    visit_reports(&mut input, |_, _| Ok(()))
+}
+
+/// Observe validated report records while reading a capture incrementally.
+/// The complete file is valid only after this function returns Ok. Visitors may
+/// see reports before a bad/missing footer is discovered; never drive a game here.
+pub fn visit_reports(
+    mut input: impl BufRead,
+    mut visitor: impl FnMut(u64, &[u8]) -> Result<()>,
+) -> Result<Summary> {
     let mut label = None;
     let mut reports = 0_u64;
     let mut changes = 0;
@@ -132,6 +142,8 @@ pub fn inspect(mut input: impl BufRead) -> Result<Summary> {
                         }
                     }
                 }
+                visitor(timestamp, &data)
+                    .with_context(|| format!("line {line_number}: report visitor failed"))?;
                 report_lengths.insert(data.len());
                 previous = Some(data);
                 elapsed_us = timestamp;

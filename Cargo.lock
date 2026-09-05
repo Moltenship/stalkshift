@@ -255,6 +255,7 @@ dependencies = [
  "anyhow",
  "clap",
  "stalkshift-capture",
+ "stalkshift-core",
  "stalkshift-hid",
 ]
 
@@ -265,6 +266,13 @@ dependencies = [
  "anyhow",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "stalkshift-core"
+version = "0.1.0-dev"
+dependencies = [
+ "stalkshift-capture",
 ]
 
 [[package]]

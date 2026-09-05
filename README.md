@@ -2,7 +2,7 @@
 
 An open-source Rust bridge between **MOZA Multi-function Stalks** and **Euro Truck Simulator 2** on Windows.
 
-**Status: hardware discovery milestone.** The repository currently provides a working HID recording CLI and offline capture validation. USB discovery and report capture have been exercised on one real MOZA device; see [hardware observations](docs/hardware-observations.md). It does **not yet control ETS2**, contain a game plugin, or have a verified MOZA button map. The first complete version targets all controls described in [the plan](PLAN.md), including D/N/R/P and optional speed-limit cruise adjustment.
+**Status: hardware discovery and indicator decoder milestone.** USB capture and left/centre/right decoding have been exercised on one real MOZA device in direct mode; see [hardware observations](docs/hardware-observations.md). The repository provides a recording CLI, offline validation and a tested indicator state machine. It does **not yet control ETS2**, contain a game plugin, or have a complete MOZA button map. The first complete version targets all controls described in [the plan](PLAN.md), including D/N/R/P and optional speed-limit cruise adjustment.
 
 ## Try the diagnostics
 
@@ -30,6 +30,14 @@ cargo run --locked -p stalkshift -- inspect fixtures/synthetic-transition.jsonl
 
 Expected: 4 reports, 2 changes, changed byte offset `{1}`. The fixture is synthetic and carries **no real MOZA mapping**.
 
+Replay the measured direct-mode indicator sequence without hardware:
+
+```powershell
+cargo run --locked -p stalkshift -- decode-indicators fixtures/moza/direct-indicators.jsonl
+```
+
+The decoder produces left → centre → right → centre twice. Zero reports between the 150 ms pulses do not cancel the physical position. At startup/reconnect, position remains unknown until an event is observed.
+
 See [the capture procedure](docs/hid-capture.md) for the full measurement checklist, file format and limitations. Raw captures stay in ignored `captures/`; review evidence before deliberately adding hardware fixtures to the repository.
 
 ## Development
@@ -45,8 +53,9 @@ cargo test --workspace --locked
 | `stalkshift` | CLI commands and recording workflow |
 | `stalkshift-hid` | Windows HID discovery and read-only report capture |
 | `stalkshift-capture` | Versioned JSONL format and streaming offline validation |
+| `stalkshift-core` | Measured direct-mode indicator decoder and state machine |
 
-Next: record the real device, implement its decoder, and prove SCS semantic input with a minimal Rust DLL. The proposed game bridge will use the official SCS Input and Telemetry APIs. HID access and IPC waits will stay outside game callbacks.
+Next: prove SCS semantic input with a minimal Rust DLL, connect the indicator decoder, and record the remaining controls. The proposed game bridge will use the official SCS Input and Telemetry APIs. HID access and IPC waits will stay outside game callbacks.
 
 ## Project scope
 

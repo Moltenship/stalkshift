@@ -36,6 +36,8 @@ enum Command {
     },
     /// Validate a capture and summarize changed raw bytes, without a device.
     Inspect { file: PathBuf },
+    /// Decode an existing capture with the measured direct-mode indicator profile.
+    DecodeIndicators { file: PathBuf },
 }
 
 fn nonempty_label(value: &str) -> Result<String, String> {
@@ -54,6 +56,25 @@ fn main() -> Result<()> {
             label,
             seconds,
         } => record(device, output, label, seconds),
+        Command::DecodeIndicators { file } => {
+            let mut decoder = stalkshift_core::DirectIndicatorDecoder::default();
+            println!("Offline direct-mode indicator decode. Initial position: Unknown.");
+            let input = BufReader::new(
+                File::open(&file).with_context(|| format!("open {}", file.display()))?,
+            );
+            let summary = stalkshift_capture::visit_reports(input, |elapsed_us, data| {
+                if let Some(position) = decoder.feed(data)? {
+                    println!("{:9.3} s  {position:?}", elapsed_us as f64 / 1_000_000.0);
+                }
+                Ok(())
+            })?;
+            println!(
+                "Validated {} reports. Final observed position: {:?}",
+                summary.reports,
+                decoder.position()
+            );
+            Ok(())
+        }
         Command::Inspect { file } => {
             let summary = stalkshift_capture::inspect(BufReader::new(
                 File::open(&file).with_context(|| format!("open {}", file.display()))?,

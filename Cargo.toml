@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/stalkshift-capture", "crates/stalkshift-hid", "crates/stalkshift"]
+members = ["crates/stalkshift-capture", "crates/stalkshift-hid", "crates/stalkshift-core", "crates/stalkshift"]
 resolver = "3"
 
 [workspace.package]
@@ -15,6 +15,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 stalkshift-capture = { path = "crates/stalkshift-capture" }
 stalkshift-hid = { path = "crates/stalkshift-hid" }
+stalkshift-core = { path = "crates/stalkshift-core" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

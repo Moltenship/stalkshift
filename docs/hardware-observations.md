@@ -1,6 +1,6 @@
 # Initial MOZA USB observations
 
-Measured on 2026-09-05 with the StalkShift diagnostic executable on Windows x64. These are observations from one device, not a supported firmware/mode matrix. Pit House mode, firmware version and operator confirmation of the movement sequence are still pending.
+Measured on 2026-09-05 with the StalkShift diagnostic executable on Windows x64. These are observations from one device, not a supported firmware/mode matrix. The operator confirmed the requested movement sequence and reported "Multi function key switch direct 1.4.0.30 pit house". We record the mode as "Multi function key switch direct" and 1.4.0.30 as the reported Pit House version; the separate device firmware version is unknown.
 
 ## Discovery
 
@@ -31,9 +31,9 @@ The operator was asked to perform centre → left → centre → right → centr
 | Bytes | Count |
 |---|---|
 | `00 00 00 00 00 00 00 00` | 298 |
-| `80 00 00 00 00 00 00 00` | 2 |
-| `00 01 00 00 00 00 00 00` | 4 |
-| `00 02 00 00 00 00 00 00` | 2 |
+| `80 00 00 00 00 00 00 00` (left event) | 2 |
+| `00 01 00 00 00 00 00 00` (centre event) | 4 |
+| `00 02 00 00 00 00 00 00` (right event) | 2 |
 
 Nonzero reports arrived in this order, repeated twice:
 
@@ -41,12 +41,20 @@ Nonzero reports arrived in this order, repeated twice:
 80 00 ... → 00 01 ... → 00 02 ... → 00 01 ...
 ```
 
-Each nonzero report was followed by zero about 150 ms later. The sequence is consistent with three movement events, but left/centre/right assignments remain provisional until the operator confirms the sequence and device mode. The recorder timestamps host read completion.
+Each nonzero report was followed by zero about 150 ms later. The confirmed sequence supports the left/centre/right assignments above for this setup. The recorder timestamps host read completion. These measurements do not establish behavior in other Pit House modes or firmware versions.
 
 ## Consequences for the decoder
 
 - An all-zero report cannot be treated as a centred physical lever in this recording mode. Releasing a pulse and moving the lever to centre are distinct events.
-- If this mode is retained, the decoder will likely need to latch positions from observed movement events, with initial state **unknown** until an appropriate event arrives.
+- The implemented `DirectIndicatorDecoder` latches positions from movement events, with initial state **unknown** until an appropriate event arrives. It resets on explicit disconnect/reset or invalid input; pulse release does not cancel the indicator.
 - Test whether another Pit House mode exposes persistent positions or an initial-state query before choosing the production device protocol.
-- Confirm the mapping with isolated left, centre and right movements, then repeat startup/reconnect tests with the lever already displaced.
-- The local raw captures remain in ignored `captures/`. No semantic MOZA fixture has been published yet.
+- Extend confirmation with startup/reconnect tests while the lever is already displaced and later compare against ETS2 state. The current decoder is offline logic, not an in-game integration.
+- The [confirmed indicator fixture](../fixtures/moza/direct-indicators.jsonl) preserves all 306 reports and their timestamps. Only its header label was updated after operator confirmation; it contains no device path or serial number. Original local captures remain in ignored `captures/`.
+
+Replay the measured sequence:
+
+```powershell
+cargo run --locked -p stalkshift -- decode-indicators fixtures/moza/direct-indicators.jsonl
+```
+
+Expected transitions: left → centre → right → centre, twice. Seven core tests cover pulse release, duplicate reports, startup uncertainty, resets, invalid/conflicting inputs, unrelated buttons and this real capture.
