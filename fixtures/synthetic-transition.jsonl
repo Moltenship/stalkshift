@@ -1,0 +1,6 @@
+{"type":"header","schema":1,"tool_version":"fixture","label":"synthetic bytes, not a MOZA mapping","device":{"vendor_id":13422,"product_id":36,"usage_page":1,"usage":4,"interface_number":0,"product":null,"release_number":0},"descriptor":null,"descriptor_error":null}
+{"type":"report","sequence":0,"elapsed_us":0,"data":[1,0,0]}
+{"type":"report","sequence":1,"elapsed_us":100000,"data":[1,0,0]}
+{"type":"report","sequence":2,"elapsed_us":200000,"data":[1,4,0]}
+{"type":"report","sequence":3,"elapsed_us":300000,"data":[1,0,0]}
+{"type":"end","elapsed_us":400000,"reports":4}

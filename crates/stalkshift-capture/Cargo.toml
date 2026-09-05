@@ -1,0 +1,15 @@
+[package]
+name = "stalkshift-capture"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Versioned HID capture format and offline validation for StalkShift"
+
+[dependencies]
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,17 @@
+[package]
+name = "stalkshift-hid"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Read-only Windows MOZA HID discovery and capture"
+
+[dependencies]
+anyhow.workspace = true
+stalkshift-capture.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+hidapi = { version = "2.6.7", default-features = false, features = ["windows-native"] }
+
+[lints]
+workspace = true

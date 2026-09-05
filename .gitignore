@@ -1,0 +1,6 @@
+/target/
+/captures/
+*.log
+.env
+.env.*
+!.env.example
