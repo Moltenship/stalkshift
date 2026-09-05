@@ -22,7 +22,17 @@ if (-not $Language) {
 }
 $messages = Get-Content -LiteralPath (Join-Path $PSScriptRoot "$Language.json") -Raw -Encoding UTF8 | ConvertFrom-Json
 function Say([string]$key) { Write-Host $messages.$key }
-function Hash([string]$path) { (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash }
+function Hash([string]$path) {
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    $stream = $null
+    try {
+        $stream = [System.IO.File]::OpenRead($path)
+        [BitConverter]::ToString($sha.ComputeHash($stream)).Replace('-','')
+    } finally {
+        if ($stream) { $stream.Dispose() }
+        $sha.Dispose()
+    }
+}
 function Write-Preserved([string]$path, [byte[]]$bytes) {
     $attributes = [System.IO.File]::GetAttributes($path)
     try {
