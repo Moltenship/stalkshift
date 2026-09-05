@@ -2,7 +2,7 @@
 
 An open-source Rust bridge between **MOZA Multi-function Stalks** and **Euro Truck Simulator 2** on Windows.
 
-**Status: control bridge prototype for ETS2 1.60.1.7.** Indicators, the light ring, flash/high beams and front wipers are implemented for the measured MOZA direct mode. Indicators, pause/USB recovery, light modes and beam operation have been confirmed in the game; wiper acceptance is in progress. A Rust DLL connects through the official SCS Input and Telemetry APIs. Horn, hazards, cruise and gears are not implemented yet. The first complete version still targets all controls described in [the plan](PLAN.md), including D/N/R/P and optional speed-limit cruise adjustment.
+**Status: control bridge prototype for ETS2 1.60.1.7.** Indicators, the light ring, flash/high beams and front wipers are implemented for the measured MOZA direct mode. Indicators, pause/USB recovery, light modes and beam operation have been confirmed in the game. A single MIST sweep is confirmed on the standard Mercedes-Benz New Actros StreamSpace; visual confirmation of the other wiper speeds is still pending. A Rust DLL connects through the official SCS Input and Telemetry APIs. Horn, hazards, cruise and gears are not implemented yet. The first complete version still targets all controls described in [the plan](PLAN.md), including D/N/R/P and optional speed-limit cruise adjustment.
 
 ## Try the controls in ETS2
 

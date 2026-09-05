@@ -76,7 +76,7 @@ On 2026-09-05, ETS2 1.60.1.7 loaded both StalkShift APIs. The first game test ex
 | Light ring OFF / parking / low | Passed: operator confirmation and repeated matching telemetry transitions |
 | Flash hold/release and high-beam toggle | Passed visually; high-beam toggles also matched telemetry |
 | Front wiper OFF / INT / LO / HI | Pending visual game acceptance of this milestone |
-| MIST exactly one complete sweep | Pending visual game acceptance of this milestone |
+| MIST exactly one complete sweep | Passed on standard Mercedes-Benz New Actros StreamSpace: operator confirmed one sweep after the acknowledged low-speed fix |
 | Pause/resume and fresh movement | Passed: outputs released, no stale hold on resume, fresh movement restored control |
 | USB disconnect/reconnect | Passed: indicator released on disconnect, device reopened, fresh movement restored control |
 | Stop/restart bridge with indicator held | Pending |
@@ -85,7 +85,7 @@ On 2026-09-05, ETS2 1.60.1.7 loaded both StalkShift APIs. The first game test ex
 
 During the light test, `truck.light.beam.high` changed with latched high-beam toggles but stayed unchanged during operator-confirmed flashes. Do not use that channel alone as acknowledgement that `lighthorn` is visibly working.
 
-The current truck was identified by the operator as the standard Mercedes-Benz New Actros StreamSpace. The first MIST attempt used a one-input-frame intermittent request and produced no visible wipe. It was replaced with the acknowledged low-speed sequence above; retesting is in progress. Normal wiper activation/OFF telemetry worked, but visual differences between all three running modes were not yet clearly confirmed. SCS defines animation duration and delay in the truck's [interior data](https://modding.scssoft.com/wiki/Documentation/Engine/Units/accessory_interior_data); the bool SDK channel cannot inspect those settings.
+The current truck was identified by the operator as the standard Mercedes-Benz New Actros StreamSpace. The first MIST attempt used a one-input-frame intermittent request and produced no visible wipe. It was replaced with the acknowledged low-speed sequence above. On 2026-09-05, the operator confirmed that the corrected build produces one sweep in the requested OFF → MIST → OFF retest. This confirms MIST on this truck; other trucks and frame rates remain untested. Normal wiper activation/OFF telemetry worked, but visual differences between all three running modes were not yet clearly confirmed. SCS defines animation duration and delay in the truck's [interior data](https://modding.scssoft.com/wiki/Documentation/Engine/Units/accessory_interior_data); the bool SDK channel cannot inspect those settings.
 
 1. Left → centre → right → centre: compare physical lever, game lamps, and logical telemetry.
 2. Pause/resume: inputs release, stale commands are not replayed; re-arm by moving the stalk.
