@@ -53,7 +53,16 @@ The minimal ABI declarations match the official SDK's x64 size/alignment asserti
 
 ## Manual acceptance
 
-On 2026-09-05, ETS2 1.60.1.7 loaded both StalkShift APIs and reported the expected logical indicator changes and centre releases. The operator then identified that the original HID recording had reversed direction labels. The decoder, fixture annotation and replay expectations were corrected together; physical direction acceptance must use the corrected build. This observation does not yet verify pause, USB reconnection, keyboard coexistence or steering cancellation.
+On 2026-09-05, ETS2 1.60.1.7 loaded both StalkShift APIs. The first game test exposed reversed direction labels in the original HID recording. After correcting the decoder, fixture annotation and replay expectations together, the operator confirmed that physical left/right positions and centre cancellation matched the game. Logical indicator telemetry independently confirmed both directions and releases across repeated movements. The tested configuration was direct USB, "Multi function key switch direct", reported Pit House 1.4.0.30, separate firmware unknown.
+
+| Check | Result |
+|---|---|
+| Physical left/right and centre cancellation | Passed on the corrected build, operator and telemetry confirmation |
+| Pause/resume and fresh movement | Passed: outputs released, no stale hold on resume, fresh movement restored control |
+| USB disconnect/reconnect | Passed: indicator released on disconnect, device reopened, fresh movement restored control |
+| Stop/restart bridge with indicator held | Pending |
+| Keyboard/wheel coexistence and steering cancellation | Pending |
+| Loading saves and changing truck | Pending |
 
 1. Left → centre → right → centre: compare physical lever, game lamps, and logical telemetry.
 2. Pause/resume: inputs release, stale commands are not replayed; re-arm by moving the stalk.

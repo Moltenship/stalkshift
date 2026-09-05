@@ -2,7 +2,7 @@
 
 An open-source Rust bridge between **MOZA Multi-function Stalks** and **Euro Truck Simulator 2** on Windows.
 
-**Status: indicator bridge prototype.** USB capture and left/centre/right decoding have been exercised on one real MOZA device in direct mode. A Rust DLL now connects the bridge to the official SCS Input and Telemetry APIs; real-game acceptance is in progress. Lights, wipers, cruise and gears are not implemented yet. The first complete version still targets all controls described in [the plan](PLAN.md), including D/N/R/P and optional speed-limit cruise adjustment.
+**Status: indicator bridge prototype, tested in ETS2 1.60.1.7.** Left/right activation, centre cancellation, pause/resume and USB reconnection have been confirmed on one real MOZA device in direct mode, both visually and through game telemetry. A Rust DLL connects the bridge to the official SCS Input and Telemetry APIs. Broader acceptance is still in progress; lights, wipers, cruise and gears are not implemented yet. The first complete version still targets all controls described in [the plan](PLAN.md), including D/N/R/P and optional speed-limit cruise adjustment.
 
 ## Try indicators in ETS2
 
