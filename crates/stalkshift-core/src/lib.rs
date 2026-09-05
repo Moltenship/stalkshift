@@ -1,4 +1,4 @@
-//! Measured MOZA indicator pulse decoding. No game commands are emitted here.
+//! Measured MOZA control decoding. No game commands are emitted here.
 
 use std::fmt;
 
@@ -8,6 +8,8 @@ mod wipers;
 pub use wipers::{DirectWiperDecoder, WiperPosition};
 mod beams;
 pub use beams::DirectBeamDecoder;
+mod auxiliary;
+pub use auxiliary::{AuxiliaryState, DirectAuxiliaryDecoder, Selector};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum IndicatorPosition {
@@ -26,11 +28,15 @@ pub enum DecodeError {
     ConflictingLightPulses,
     ConflictingWiperPulses,
     ConflictingBeamInputs,
+    ConflictingAuxiliaryInputs,
 }
 
 impl fmt::Display for DecodeError {
     fn fmt(&self, output: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::ConflictingAuxiliaryInputs => {
+                write!(output, "conflicting auxiliary control positions")
+            }
             Self::UnexpectedReportLength(length) => {
                 write!(output, "expected 8-byte MOZA report, got {length}")
             }

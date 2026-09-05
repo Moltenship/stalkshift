@@ -2,7 +2,7 @@
 
 An open-source Rust bridge between **MOZA Multi-function Stalks** and **Euro Truck Simulator 2** on Windows.
 
-**Status: control bridge prototype for ETS2 1.60.1.7.** Indicators, the light ring, flash/high beams and front wipers are implemented for the measured MOZA direct mode. Indicators, pause/USB recovery, light modes and beam operation have been confirmed in the game. A single MIST sweep is confirmed on the standard Mercedes-Benz New Actros StreamSpace; visual confirmation of the other wiper speeds is still pending. A Rust DLL connects through the official SCS Input and Telemetry APIs. Horn, hazards, cruise and gears are not implemented yet. The first complete version still targets all controls described in [the plan](PLAN.md), including D/N/R/P and optional speed-limit cruise adjustment.
+**Status: full-control prototype for ETS2 1.60.1.7, ready for combined game acceptance.** The measured MOZA direct-mode profile implements indicators, lights, beams, wipers, horn, hazards, D/N/R/P, parking brake, manual cruise and optional speed-limit cruise adjustment. Indicators, lights and a single MIST sweep on the standard New Actros have prior game confirmation. Newly added controls are covered by hardware replays and automated tests but still need game acceptance. See the [Russian control/test guide](docs/controls-ru.md) and [acceptance table](docs/game-integration.md).
 
 ## Try the controls in ETS2
 
@@ -18,7 +18,7 @@ Close ETS2, install the plugin, and start the bridge:
 .\target\release\stalkshift.exe bridge --device 0
 ```
 
-Enter the truck and wait for `ready=true`, then move each position control to synchronize it. Release the beam lever before pressing it. The indicator, light ring and front-wiper thumbwheel send movement pulses, so each requires re-arming after pause/reconnect. The small front-wiper thumbwheel is beside MIST/OFF/INT/LO/HI on the right stalk; the end ring marked REAR is a different control. See [game integration](docs/game-integration.md) for assignments, disconnect behavior and acceptance checks. Install the matching application and DLL together: this build uses protocol v2 and does not connect to the old indicator-only DLL.
+Enter the truck and wait for `ready=true`, then move each position control to synchronize it. Release the beam lever before pressing it. The indicator, light ring and front-wiper thumbwheel send movement pulses, so each requires re-arming after pause/reconnect. The small front-wiper thumbwheel is beside MIST/OFF/INT/LO/HI on the right stalk; the end ring marked REAR is a different control. See [game integration](docs/game-integration.md) for assignments, disconnect behavior and acceptance checks. Install the matching application and DLL together: this build uses protocol v3 and does not connect to previous v1/v2 DLLs.
 
 ## Try the diagnostics
 
@@ -73,7 +73,7 @@ cargo test --workspace --locked
 | `stalkshift-protocol` | Bounded named-pipe protocol, sessions, readiness epochs and input leases |
 | `stalkshift-plugin` | Windows x64 SCS Input/Telemetry DLL with bounded input dispatch |
 
-The core tests replay all four reviewed hardware captures, including the operator's documented corrections. Protocol tests cover independent controls, invalid/conflicting commands, session changes, lease expiry and MIST interruption. HID access and IPC waits stay outside game callbacks. The actual DLL is probed against a mock SCS host for ABI layout, callback registration, failure rollback and repeated initialization/shutdown. Remaining game checks are recorded in [the acceptance table](docs/game-integration.md).
+The core tests replay all ten reviewed hardware captures, including the operator's documented corrections. Protocol tests cover independent controls, invalid/conflicting commands, session changes, lease expiry and MIST interruption. HID access and IPC waits stay outside game callbacks. The actual DLL is probed against a mock SCS host for ABI layout, callback registration, failure rollback and repeated initialization/shutdown. Remaining game checks are recorded in [the acceptance table](docs/game-integration.md).
 
 ## Project scope
 

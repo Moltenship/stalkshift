@@ -35,6 +35,14 @@ fn print_status(status: Packet) {
         .map(|(_, name)| *name)
         .collect();
     println!(
+        "Driving: cruise={:?} limit={:?} speed={:?} gear={:?} auto={}",
+        status.motion[0],
+        status.motion[1],
+        status.motion[2],
+        status.motion[3],
+        status.value & stalkshift_protocol::AUTO_ENABLED != 0
+    );
+    println!(
         "Game: ready={} {} | plugin inputs: {}",
         status.value & READY != 0,
         telemetry.join(" "),
@@ -49,6 +57,7 @@ fn print_status(status: Packet) {
 #[derive(Default)]
 struct BridgeState {
     decoder: DirectIndicatorDecoder,
+    auxiliary: stalkshift_core::DirectAuxiliaryDecoder,
     lights: DirectLightDecoder,
     wipers: DirectWiperDecoder,
     beams: DirectBeamDecoder,
@@ -61,6 +70,7 @@ impl BridgeState {
         self.lights.reset();
         self.wipers.reset();
         self.beams.reset();
+        self.auxiliary.reset();
         self.last_report = None;
     }
     fn disconnected(&mut self) {
@@ -79,7 +89,8 @@ impl BridgeState {
         let lights = self.lights.feed(bytes)?.is_some();
         let wipers = self.wipers.feed(bytes)?.is_some();
         let beams = self.beams.feed(bytes)?;
-        Ok(indicators || lights || wipers || beams)
+        let auxiliary = self.auxiliary.feed(bytes)?;
+        Ok(indicators || lights || wipers || beams || auxiliary)
     }
     fn reply(&mut self, status: Packet, now: Instant) -> Packet {
         let binding = Some((status.session, status.epoch));
@@ -97,11 +108,12 @@ impl BridgeState {
             self.reset();
         }
         let desired = if status.value & READY != 0 {
-            indicator_inputs(self.decoder.position())
+            stalkshift_protocol::auxiliary_inputs(self.auxiliary.state())
+                | indicator_inputs(self.decoder.position())
                 | light_inputs(self.lights.position())
                 | wiper_inputs(self.wipers.position())
-                | (u32::from(self.beams.flash()) * FLASH_INPUT)
-                | (u32::from(self.beams.high_beam_pressed()) * HIGH_BEAM_INPUT)
+                | (u64::from(self.beams.flash()) * FLASH_INPUT)
+                | (u64::from(self.beams.high_beam_pressed()) * HIGH_BEAM_INPUT)
         } else {
             0
         };
@@ -140,7 +152,7 @@ pub fn run(index: usize, seconds: Option<u64>) -> Result<()> {
                     Ok(size) => {
                         let Ok(mut state) = reader_state.lock() else { break };
                         match state.feed(&buffer[..size], Instant::now()) {
-                            Ok(true) => println!("Stalk: indicator={:?} lights={:?} wipers={:?} flash={} high-beam-press={}", state.decoder.position(), state.lights.position(), state.wipers.position(), state.beams.flash(), state.beams.high_beam_pressed()),
+                            Ok(true) => println!("Stalk: indicator={:?} lights={:?} wipers={:?} flash={} high-beam-press={} auxiliary={:?}", state.decoder.position(), state.lights.position(), state.wipers.position(), state.beams.flash(), state.beams.high_beam_pressed(), state.auxiliary.state()),
                             Ok(false) => {},
                             Err(error) => { state.reset(); eprintln!("Invalid HID input: {error}"); }
                         }
@@ -154,7 +166,7 @@ pub fn run(index: usize, seconds: Option<u64>) -> Result<()> {
             if let Ok(mut state) = reader_state.lock() { state.reset(); }
         })?;
         println!("StalkShift is running. Start ETS2 and enter the truck, then move each control to synchronize.");
-        println!("Indicators, light modes and front wipers are enabled. Ctrl+C stops the bridge; the plugin releases inputs on connection loss.");
+        println!("Indicators, light modes and front wipers are enabled. Horn, hazards, selector, parking brake and cruise are enabled. Ctrl+C stops the bridge; the plugin releases inputs on connection loss.");
         let expired = || seconds.is_some_and(|seconds| start.elapsed() >= Duration::from_secs(seconds));
         let result: Result<()> = async {
             while !expired() {
@@ -173,9 +185,9 @@ pub fn run(index: usize, seconds: Option<u64>) -> Result<()> {
                         ensure!(connection_session.is_none_or(|session| session == status.session), "session changed inside connection");
                         ensure!(previous_sequence.is_none_or(|sequence| status.sequence > sequence), "out-of-order plugin status");
                         connection_session = Some(status.session); previous_sequence = Some(status.sequence);
-                        if previous_status != Some(status.value) {
+                        if previous_status != Some((status.value, status.motion[0], status.motion[1], status.motion[3])) {
                             print_status(status);
-                            previous_status = Some(status.value);
+                            previous_status = Some((status.value, status.motion[0], status.motion[1], status.motion[3]));
                         }
                         let reply = state.lock().map_err(|_| io::Error::other("HID state poisoned"))?.reply(status, Instant::now());
                         pipe::send(&mut server, reply).await?;
@@ -202,6 +214,7 @@ mod tests {
         let mut state = BridgeState::default();
         let now = Instant::now();
         let mut status = Packet {
+            motion: [i32::MIN; 4],
             kind: Kind::Status,
             value: READY,
             session: 1,
@@ -228,6 +241,7 @@ mod tests {
         let mut state = BridgeState::default();
         let now = Instant::now();
         let status = Packet {
+            motion: [i32::MIN; 4],
             kind: Kind::Status,
             value: READY,
             session: 1,

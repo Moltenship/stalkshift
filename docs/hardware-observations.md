@@ -86,3 +86,55 @@ Reviewed captures preserve every report and timestamp:
 - [Beam lever](../fixtures/moza/direct-beam-lever.jsonl): 610 reports over 120 seconds. Two towards-driver holds and three away-driver holds were observed, with intervening releases. The file also contains light-ring movements. The label describes the requested two-pass procedure; the replay test checks the actual extra press and all releases.
 
 These captures establish hardware events; a HID replay alone does not verify game modes or a complete single MIST sweep. See [game acceptance](game-integration.md).
+
+## Right main lever: 2026-09-05
+
+The operator confirmed that the position below the lowest fixed detent requires holding and returns on release. Pulling towards the driver was recorded separately, twice at each of the three lower fixed detents.
+
+| Physical action | First three report bytes | Observed behavior |
+|---|---|---|
+| Lowest fixed detent | `00 00 10` | Approximately 150 ms pulse |
+| Next fixed detent up | `00 00 20` | Approximately 150 ms pulse |
+| Third fixed detent | `00 00 40` | Approximately 150 ms pulse |
+| Highest fixed detent | `00 00 80` | Approximately 150 ms pulse |
+| Push below lowest fixed detent | `00 00 08` | Held; release produces lowest-detent pulse |
+| Pull towards driver | `00 00 04` | Held in all three tested detents; release clears bit |
+
+- [Main lever capture](../fixtures/moza/direct-right-main.jsonl): 911 reports over 180 seconds. The requested recording originally included pulls, but the operator actually moved through the fixed positions and held bottom overtravel without pulling. The fixture label describes the corrected account; the recording begins partway through the position sequence.
+- [Pull capture](../fixtures/moza/direct-right-pull.jsonl): 608 reports over 120 seconds. An accidental bottom-overtravel hold at 37.073 seconds precedes the six intentional towards-driver holds. Both are preserved, rather than labeling the accidental hold as horn input.
+
+The intended D/N/R/P, horn and parking-brake assignments are not yet game-verified. No simultaneous pull/overtravel combination was requested in these recordings.
+
+## REAR ring: 2026-09-05
+
+The operator confirmed downward spring action from OFF, upward rotation into the other fixed position, then upward spring action and repeats. The [reviewed capture](../fixtures/moza/direct-rear-ring.jsonl) contains 612 reports over 120 seconds, including extra presses. Its last observed fixed position is upper, despite the original request to finish in OFF.
+
+| Physical action | First three report bytes | Observed behavior |
+|---|---|---|
+| OFF / return from lower spring action | `00 04 00` | Approximately 150 ms pulse |
+| Upper fixed position / return from upper spring action | `00 08 00` | Approximately 150 ms pulse |
+| Either spring action | `00 10 00` | Held until release; direction is not encoded in this bit |
+
+Three lower spring holds return to OFF; four upper spring holds return to the upper fixed position. The first lower hold is brief (about 0.62 seconds); later lower holds last about three seconds. A decoder must retain fixed-position context to distinguish the intended hazard action from the unassigned upper action. Zero reports alone do not establish that context, and an initially held spring action must not invent an OFF baseline. No in-game hazard result has been claimed yet.
+
+## Cruise ON/OFF rotary switch: 2026-09-05
+
+The operator identified the control on the separate cruise stalk as an ON/OFF rotary switch with spring return, similar in movement to REAR but without a latched position. It is not an end button. The [reviewed capture](../fixtures/moza/direct-cruise-on-off.jsonl) contains 902 reports over 180 seconds: one brief activation at 66.932 seconds, followed by two intentional holds at 126.304–128.609 and 131.952–134.351 seconds.
+
+The active report is `00 00 00 01 00 00 00 00` (bit 24). Release clears this bit. Despite the original recording instructions, no towards-driver, upward or downward cruise-stalk movements were performed in this file. The fixture label corrects that distinction; raw reports and timestamps are unchanged. Game cruise toggling remains unverified.
+
+## Cruise stalk directions: 2026-09-05
+
+The [direction capture](../fixtures/moza/direct-cruise-directions.jsonl) contains 607 reports over 120 seconds. The operator confirmed the requested order: towards driver twice, up twice, down twice, leaving the ON/OFF rotary switch untouched. All six holds have distinct releases to zero; actual holds last approximately 1.6–2.5 seconds rather than the requested three seconds.
+
+| Movement | First four report bytes | Intended game assignment, not yet verified |
+|---|---|---|
+| Towards driver | `00 00 00 08` | Resume when cruise is inactive; cancel when active |
+| Up | `00 00 00 04` | Increase cruise target, repeating while held |
+| Down | `00 00 00 02` | Decrease cruise target, repeating while held |
+
+These are held signals, not latched-position pulses. Initial held inputs after a new session must wait for release and a fresh movement before causing a cruise action.
+
+## Left small spring switch: 2026-09-05
+
+The operator described circle and crossed-line lamp markings beside the small switch on the left main stalk, and confirmed spring return. The [capture](../fixtures/moza/direct-left-switch.jsonl) contains 452 reports over 90 seconds. Three active intervals use `40 00 00 00 00 00 00 00` (bit 6), followed by zero releases. The first lasts about 0.71 seconds, then 2.26 and 2.97 seconds. The intended assignment is toggling automatic speed-limit cruise adjustment; game acceptance is pending.

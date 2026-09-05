@@ -1,8 +1,8 @@
 use crate::{MIST_REQUEST, WIPER_MASK};
 use std::time::{Duration, Instant};
 
-const OFF: u32 = 1 << 5;
-const LOW: u32 = 1 << 7;
+const OFF: u64 = 1 << 5;
+const LOW: u64 = 1 << 7;
 const ACK_TIMEOUT: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -40,7 +40,7 @@ impl Mist {
         self.since = Some(now);
     }
 
-    pub fn apply(&mut self, desired: u32, observed: Option<bool>, now: Instant) -> u32 {
+    pub fn apply(&mut self, desired: u64, observed: Option<bool>, now: Instant) -> u64 {
         if self.since.is_none() && self.needs_park {
             self.since = Some(now);
         }

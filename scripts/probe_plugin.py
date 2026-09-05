@@ -80,7 +80,7 @@ def probe(path):
     channels = {}
     failures = []
     fail_second_channel = False
-    input_names = [b'lblinkerh', b'rblinkerh', b'lightoff', b'lightpark', b'lighton', b'wipers0', b'wipers1', b'wipers2', b'wipers3', b'lighthorn', b'hblight']
+    input_names = [b'lblinkerh', b'rblinkerh', b'lightoff', b'lightpark', b'lighton', b'wipers0', b'wipers1', b'wipers2', b'wipers3', b'lighthorn', b'hblight', b'horn', b'flasher4way', b'gear0', b'geardrive', b'gearreverse', b'parkingbrake', b'cruiectrl', b'cruiectrlres', b'cruiectrlinc', b'cruiectrldec']
 
     @Log
     def log(level, text):
@@ -108,11 +108,13 @@ def probe(path):
         events.pop(event, None)
         return 0
 
+    number_kinds = {b'truck.cruise_control': 5, b'truck.navigation.speed.limit': 5, b'truck.speed': 5, b'truck.displayed.gear': 2}
+
     @RegisterChannel
     def register_channel(name, index, kind, flags, callback, context):
         if fail_second_channel and name == b'truck.rblinker':
             return -4
-        if index != 0xFFFFFFFF or kind != 1 or flags != 3:
+        if index != 0xFFFFFFFF or kind != number_kinds.get(name, 1) or flags != 3:
             failures.append('incorrect channel registration')
             return -7
         channels[name] = (ChannelCallback(c.cast(callback, c.c_void_p).value), context)
@@ -156,6 +158,17 @@ def probe(path):
         value = Value(1, 0, (c.c_uint64 * 5)())
         for name, (callback, context) in channels.items():
             callback(name, 0xFFFFFFFF, c.byref(value), context)
+        assert set(number_kinds) <= set(channels)
+        assert len(channels) == 11
+        for name, kind in number_kinds.items():
+            callback, context = channels[name]
+            number = Value(kind, 0, (c.c_uint64 * 5)())
+            if kind == 5:
+                c.cast(c.byref(number, 8), c.POINTER(c.c_float))[0] = 20.0
+            else:
+                c.cast(c.byref(number, 8), c.POINTER(c.c_int32))[0] = -1
+            callback(name, 0xFFFFFFFF, c.byref(number), context)
+            callback(name, 0xFFFFFFFF, None, context)
         callbacks['active'](1, None)
         event = Event()
         for expected_index in range(len(input_names)):

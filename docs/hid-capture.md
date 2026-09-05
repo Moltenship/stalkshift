@@ -26,7 +26,8 @@ Use a distinct file and descriptive `--label` for each row. Start from a documen
 | `right-overtravel` | Push below D, hold, release |
 | `wiper-wheel` | Small thumbwheel in the right stalk's rectangular recess beside MIST/OFF/INT/LO/HI; rotate through its positions in both directions |
 | `rear-ring` | Ring at the end of the right stalk marked REAR; each detent and spring-loaded action from each available baseline |
-| `cruise` | End button, pull, up and down, including holds |
+| `cruise-on-off` | ON/OFF spring-return rotary switch on the separate cruise stalk; rotate, hold and release (not an end button on the tested device) |
+| `cruise-directions` | Move the separate cruise stalk towards the driver, up and down, including holds; leave its ON/OFF rotary switch untouched |
 | `combinations` | Indicator + lights; selector + pull; other mechanically possible combinations |
 | `startup-left` | Connect with indicator already left; start recorder without moving, then move to centre |
 

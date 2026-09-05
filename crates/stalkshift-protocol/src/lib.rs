@@ -3,13 +3,14 @@ use std::time::{Duration, Instant};
 
 mod controls;
 pub use controls::*;
+mod actions;
 mod mist;
 
 #[cfg(windows)]
 pub mod pipe;
 
-pub const PIPE_NAME: &str = r"\\.\pipe\stalkshift-controls-v2";
-pub const FRAME_SIZE: usize = 40;
+pub const PIPE_NAME: &str = r"\\.\pipe\stalkshift-controls-v3";
+pub const FRAME_SIZE: usize = 56;
 pub const LEASE: Duration = Duration::from_millis(600);
 pub const IO_TIMEOUT: Duration = Duration::from_millis(300);
 pub const INTERVAL: Duration = Duration::from_millis(50);
@@ -24,7 +25,8 @@ pub enum Kind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Packet {
     pub kind: Kind,
-    pub value: u32,
+    pub motion: [i32; 4],
+    pub value: u64,
     pub session: u64,
     pub sequence: u64,
     pub epoch: u64,
@@ -34,12 +36,15 @@ impl Packet {
     pub fn encode(self) -> [u8; FRAME_SIZE] {
         let mut bytes = [0; FRAME_SIZE];
         bytes[..4].copy_from_slice(b"STSF");
-        bytes[4..6].copy_from_slice(&2_u16.to_le_bytes());
+        bytes[4..6].copy_from_slice(&3_u16.to_le_bytes());
         bytes[6] = self.kind as u8;
-        bytes[8..12].copy_from_slice(&self.value.to_le_bytes());
+        bytes[8..16].copy_from_slice(&self.value.to_le_bytes());
         bytes[16..24].copy_from_slice(&self.session.to_le_bytes());
         bytes[24..32].copy_from_slice(&self.sequence.to_le_bytes());
         bytes[32..40].copy_from_slice(&self.epoch.to_le_bytes());
+        for (index, value) in self.motion.iter().enumerate() {
+            bytes[40 + index * 4..44 + index * 4].copy_from_slice(&value.to_le_bytes());
+        }
         bytes
     }
 
@@ -50,11 +55,7 @@ impl Packet {
                 "invalid StalkShift protocol frame",
             )
         };
-        if &bytes[..4] != b"STSF"
-            || bytes[4..6] != [2, 0]
-            || bytes[7] != 0
-            || bytes[12..16] != [0; 4]
-        {
+        if &bytes[..4] != b"STSF" || bytes[4..6] != [3, 0] || bytes[7] != 0 {
             return Err(invalid());
         }
         let kind = match bytes[6] {
@@ -62,7 +63,7 @@ impl Packet {
             2 => Kind::Command,
             _ => return Err(invalid()),
         };
-        let value = u32::from_le_bytes(bytes[8..12].try_into().expect("fixed value field"));
+        let value = u64::from_le_bytes(bytes[8..16].try_into().expect("fixed value field"));
         if (kind == Kind::Command && !valid_inputs(value))
             || (kind == Kind::Status && value & !STATUS_MASK != 0)
         {
@@ -70,7 +71,18 @@ impl Packet {
         }
         let read =
             |offset| u64::from_le_bytes(bytes[offset..offset + 8].try_into().expect("fixed field"));
+        let motion = std::array::from_fn(|index| {
+            i32::from_le_bytes(
+                bytes[40 + index * 4..44 + index * 4]
+                    .try_into()
+                    .expect("numeric field"),
+            )
+        });
+        if kind == Kind::Command && motion != UNKNOWN_MOTION {
+            return Err(invalid());
+        }
         let packet = Self {
+            motion,
             kind,
             value,
             session: read(16),
@@ -83,9 +95,10 @@ impl Packet {
         Ok(packet)
     }
 
-    pub fn reply(self, inputs: u32) -> Self {
+    pub fn reply(self, inputs: u64) -> Self {
         Self {
             kind: Kind::Command,
+            motion: UNKNOWN_MOTION,
             value: inputs,
             ..self
         }
@@ -100,9 +113,12 @@ pub struct InputGate {
     ready: bool,
     sequence: Option<u64>,
     last_received: Option<Instant>,
-    desired: u32,
+    desired: u64,
     mist: mist::Mist,
     wipers_on: Option<bool>,
+    actions: actions::Actions,
+    parking: Option<bool>,
+    motion: [i32; 4],
 }
 
 impl Default for InputGate {
@@ -116,6 +132,9 @@ impl Default for InputGate {
             desired: 0,
             mist: mist::Mist::default(),
             wipers_on: None,
+            actions: actions::Actions::default(),
+            parking: None,
+            motion: UNKNOWN_MOTION,
         }
     }
 }
@@ -127,6 +146,7 @@ impl InputGate {
         self.last_received = None;
         self.desired = 0;
         self.mist.invalidate();
+        self.actions = actions::Actions::default();
     }
     pub fn connect(&mut self, session: u64) {
         self.session = session;
@@ -177,6 +197,13 @@ impl InputGate {
     pub fn observe_wipers(&mut self, observed: Option<bool>) {
         self.wipers_on = observed;
     }
+    pub fn observe_driving(&mut self, parking: Option<bool>, motion: [i32; 4]) {
+        self.parking = parking;
+        self.motion = motion;
+    }
+    pub fn automatic(&self) -> bool {
+        self.actions.automatic
+    }
     /// Call once per input frame. MIST waits for wiper telemetry between phases.
     pub fn outputs(&mut self, now: Instant) -> [bool; INPUT_COUNT] {
         self.expire(now);
@@ -186,6 +213,7 @@ impl InputGate {
             0
         };
         let desired = self.mist.apply(desired, self.wipers_on, now);
+        let desired = self.actions.apply(desired, self.parking, self.motion, now);
         std::array::from_fn(|index| desired & (1 << index) != 0)
     }
 }
@@ -260,7 +288,9 @@ mod tests {
         for invalid in [
             3,
             (1 << 2) | (1 << 4),
-            1 << (INPUT_COUNT + 1),
+            1 << 63,
+            DRIVE | REVERSE,
+            CRUISE_UP | CRUISE_DOWN,
             MIST_REQUEST | (1 << 5),
         ] {
             packet.value = invalid;
@@ -291,6 +321,7 @@ mod tests {
         gate.connect(42);
         gate.set_ready(true);
         let packet = Packet {
+            motion: [i32::MIN; 4],
             kind: Kind::Command,
             session: 42,
             epoch: gate.epoch,
@@ -310,6 +341,33 @@ mod tests {
             invalid[offset] = value;
             assert!(Packet::decode(&invalid).is_err());
         }
+    }
+    #[test]
+    fn numerical_telemetry_and_wide_status_survive_wire_round_trip() {
+        let (_, mut packet, _) = setup();
+        packet.kind = Kind::Status;
+        packet.value = AUTO_ENABLED | sent_bit(20) | READY;
+        packet.motion = [25000, 22222, 21000, -1];
+        assert_eq!(Packet::decode(&packet.encode()).unwrap(), packet);
+        let reply = packet.reply(HORN);
+        assert_eq!(reply.motion, UNKNOWN_MOTION);
+        assert_eq!(Packet::decode(&reply.encode()).unwrap(), reply);
+        packet.kind = Kind::Command;
+        packet.value = HORN;
+        assert!(Packet::decode(&packet.encode()).is_err());
+    }
+    #[test]
+    fn connection_expiry_cancels_horn_gear_and_automatic_adjustment() {
+        let (mut gate, mut packet, now) = setup();
+        gate.observe_driving(Some(false), [22000, 25000, 22000, 10]);
+        packet.value = HORN | DRIVE | AUTO_TOGGLE;
+        assert!(gate.accept(packet, now));
+        let output = gate.outputs(now);
+        assert!(output[11] && output[14] && output[19]);
+        assert!(gate.automatic());
+        assert_eq!(gate.outputs(now + LEASE), [false; INPUT_COUNT]);
+        assert!(!gate.automatic());
+        assert!(!gate.accept(packet, now + LEASE));
     }
     #[test]
     fn pause_requires_new_epoch_and_never_replays_held_input() {

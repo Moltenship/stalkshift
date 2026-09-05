@@ -66,6 +66,7 @@ mod tests {
             let mut client = ClientOptions::new().open(&name).unwrap();
             server.connect().await.unwrap();
             let packet = Packet {
+                motion: [i32::MIN; 4],
                 kind: Kind::Status,
                 session: 1,
                 epoch: 1,
@@ -91,6 +92,7 @@ mod tests {
                 let mut client = ClientOptions::new().open(&name).unwrap();
                 server.connect().await.unwrap();
                 let packet = Packet {
+                    motion: [i32::MIN; 4],
                     kind: Kind::Status,
                     session,
                     epoch: 1,

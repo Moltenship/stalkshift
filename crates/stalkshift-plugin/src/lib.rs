@@ -230,6 +230,7 @@ pub unsafe extern "system" fn scs_telemetry_init(
             c"truck.light.beam.low",
             c"truck.wipers",
             c"truck.light.beam.high",
+            c"truck.brake.parking",
         ];
         let mut events_registered = Vec::new();
         let mut channels_registered = Vec::new();
@@ -258,15 +259,40 @@ pub unsafe extern "system" fn scs_telemetry_init(
                 if result != OK {
                     return result;
                 }
-                channels_registered.push(*channel);
+                channels_registered.push((*channel, BOOL));
+            }
+            for (index, (name, kind)) in [
+                (c"truck.cruise_control", 5),
+                (c"truck.navigation.speed.limit", 5),
+                (c"truck.speed", 5),
+                (c"truck.displayed.gear", 2),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                // SAFETY: static names, SDK types float/s32, opaque integer context.
+                let result = unsafe {
+                    register_channel(
+                        name.as_ptr(),
+                        u32::MAX,
+                        kind,
+                        3,
+                        Some(numeric_channel),
+                        index as *mut c_void,
+                    )
+                };
+                if result != OK {
+                    return result;
+                }
+                channels_registered.push((name, kind));
             }
             OK
         })();
         if result != OK {
-            for channel in channels_registered {
+            for (channel, kind) in channels_registered {
                 // SAFETY: undo only registrations completed above, during the same init invocation.
                 unsafe {
-                    unregister_channel(channel.as_ptr(), u32::MAX, BOOL);
+                    unregister_channel(channel.as_ptr(), u32::MAX, kind);
                 }
             }
             for event in events_registered {
@@ -280,6 +306,9 @@ pub unsafe extern "system" fn scs_telemetry_init(
         }
         TELEMETRY_INSTALLED.store(true, Ordering::SeqCst);
         RUNNING.store(false, Ordering::SeqCst);
+        for timestamp in &crate::state::NUMBER_TIMES {
+            timestamp.store(0, Ordering::SeqCst);
+        }
         for observed in &OBSERVED {
             observed.store(0, Ordering::SeqCst);
         }
@@ -302,6 +331,9 @@ pub extern "system" fn scs_telemetry_shutdown() {
         TELEMETRY_INITIALIZED.store(false, Ordering::SeqCst);
         TELEMETRY_INSTALLED.store(false, Ordering::SeqCst);
         RUNNING.store(false, Ordering::SeqCst);
+        for timestamp in &crate::state::NUMBER_TIMES {
+            timestamp.store(0, Ordering::SeqCst);
+        }
         for observed in &OBSERVED {
             observed.store(0, Ordering::SeqCst);
         }
@@ -314,6 +346,9 @@ pub extern "system" fn scs_telemetry_shutdown() {
 unsafe extern "system" fn telemetry_event(event: u32, _: *const c_void, _: *mut c_void) {
     boundary(|| {
         RUNNING.store(event == 4, Ordering::SeqCst);
+        for timestamp in &crate::state::NUMBER_TIMES {
+            timestamp.store(0, Ordering::SeqCst);
+        }
         for observed in &OBSERVED {
             observed.store(0, Ordering::SeqCst);
         }
@@ -353,4 +388,83 @@ unsafe extern "system" fn telemetry_channel(
         OBSERVED[index].store(observed, Ordering::SeqCst);
         OK
     });
+}
+
+unsafe extern "system" fn numeric_channel(
+    _: *const c_char,
+    _: u32,
+    value: *const Value,
+    context: *mut c_void,
+) {
+    boundary(|| {
+        let index = context as usize;
+        if index >= 4 {
+            return INVALID;
+        }
+        let mut number = i32::MIN;
+        if !value.is_null() {
+            // SAFETY: read only the SDK's initialized 4-byte float/s32 payload,
+            // never the uninitialized remainder of the union.
+            unsafe {
+                let kind = std::ptr::addr_of!((*value).value_type).read();
+                let payload = std::ptr::addr_of!((*value).payload);
+                if index == 3 && kind == 2 {
+                    number = payload.cast::<i32>().read();
+                } else if index < 3 && kind == 5 {
+                    let speed = payload.cast::<f32>().read();
+                    if speed.is_finite() && speed.abs() <= 200.0 {
+                        number = (speed * 1000.0).round() as i32;
+                    }
+                }
+            }
+        }
+        crate::state::NUMBERS[index].store(number, Ordering::SeqCst);
+        crate::state::NUMBER_TIMES[index].store(crate::state::clock_ms(), Ordering::SeqCst);
+        OK
+    });
+}
+
+#[cfg(test)]
+mod numeric_tests {
+    use super::*;
+    #[test]
+    fn sdk_float_and_signed_gear_decode_and_missing_values_expire() {
+        let mut value = Value {
+            value_type: 5,
+            padding: 0,
+            payload: [0; 5],
+        };
+        value.payload[0] = u64::from(22.5_f32.to_bits());
+        // SAFETY: test values initialize the entire SDK-compatible object.
+        unsafe {
+            numeric_channel(std::ptr::null(), u32::MAX, &value, std::ptr::null_mut());
+        }
+        assert_eq!(crate::state::motion()[0], 22500);
+        value.payload[0] = u64::from(f32::NAN.to_bits());
+        // SAFETY: initialized Value; the callback validates the float payload.
+        unsafe {
+            numeric_channel(std::ptr::null(), u32::MAX, &value, std::ptr::null_mut());
+        }
+        assert_eq!(crate::state::motion()[0], i32::MIN);
+        value.value_type = 2;
+        value.payload[0] = u64::from((-1_i32) as u32);
+        // SAFETY: initialized signed payload; context encodes index 3, not a pointer to memory.
+        unsafe {
+            numeric_channel(std::ptr::null(), u32::MAX, &value, 3_usize as *mut c_void);
+        }
+        assert_eq!(crate::state::motion()[3], -1);
+        // SAFETY: null is the documented no-value callback argument.
+        unsafe {
+            numeric_channel(
+                std::ptr::null(),
+                u32::MAX,
+                std::ptr::null(),
+                3_usize as *mut c_void,
+            );
+        }
+        assert_eq!(crate::state::motion()[3], i32::MIN);
+        crate::state::NUMBERS[0].store(22500, Ordering::SeqCst);
+        crate::state::NUMBER_TIMES[0].store(0, Ordering::SeqCst);
+        assert_eq!(crate::state::motion()[0], i32::MIN);
+    }
 }
