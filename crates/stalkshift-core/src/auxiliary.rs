@@ -91,6 +91,20 @@ impl DirectAuxiliaryDecoder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn simultaneous_horn_and_downward_overtravel_are_independent() {
+        let mut decoder = DirectAuxiliaryDecoder::default();
+        decoder.feed(&[0; 8]).unwrap();
+        decoder.feed(&[0, 0, 0x10, 0, 0, 0, 0, 0]).unwrap();
+        decoder.feed(&[0, 0, 0x0c, 0, 0, 0, 0, 0]).unwrap();
+        assert_eq!(decoder.state().selector, Selector::Drive);
+        assert!(decoder.state().horn && decoder.state().parking_press);
+        // Releasing the downward movement leaves the horn held.
+        decoder.feed(&[0, 0, 0x14, 0, 0, 0, 0, 0]).unwrap();
+        assert!(decoder.state().horn && !decoder.state().parking_press);
+        decoder.feed(&[0; 8]).unwrap();
+        assert!(!decoder.state().horn && !decoder.state().parking_press);
+    }
     fn replay(data: &[u8]) -> Vec<AuxiliaryState> {
         let mut decoder = DirectAuxiliaryDecoder::default();
         let mut states = Vec::new();

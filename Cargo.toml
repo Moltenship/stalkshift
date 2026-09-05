@@ -3,7 +3,7 @@ members = ["crates/stalkshift-capture", "crates/stalkshift-hid", "crates/stalksh
 resolver = "3"
 
 [workspace.package]
-version = "0.1.0-dev"
+version = "1.0.0"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/Moltenship/stalkshift"

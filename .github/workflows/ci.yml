@@ -29,20 +29,16 @@ jobs:
         run: ./target/release/stalkshift.exe inspect fixtures/synthetic-transition.jsonl
       - name: Decode measured MOZA indicator sequence
         run: ./target/release/stalkshift.exe decode-indicators fixtures/moza/direct-indicators.jsonl
+      - name: Package player release
+        run: python scripts/package-release.py
+      - name: Test packaged installer
+        run: python scripts/test-installer.py target/dist/StalkShift-1.0.0-windows-x64.zip
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: stalkshift-windows-x64-controls
+          name: stalkshift-windows-x64
           path: |
-            target/release/stalkshift.exe
-            target/release/stalkshift_plugin.dll
-            README.md
-            LICENSE
-            THIRD_PARTY_NOTICES.md
-            third-party/scs-sdk-LICENSE.txt
-            docs/
-            fixtures/
-            scripts/install-plugin.ps1
-            scripts/probe_plugin.py
+            target/dist/StalkShift-*-windows-x64.zip
+            target/dist/SHA256SUMS.txt
           if-no-files-found: error
   portable:
     name: Portable capture parser

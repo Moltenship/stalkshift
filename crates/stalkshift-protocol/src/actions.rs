@@ -238,6 +238,43 @@ impl Actions {
 mod tests {
     use super::*;
     #[test]
+    fn combined_horn_and_parking_holds_horn_but_only_pulses_brake_once() {
+        let now = Instant::now();
+        let mut actions = Actions::default();
+        actions.apply(DRIVE, Some(false), UNKNOWN_MOTION, now);
+        let press = now + REPEAT;
+        assert_eq!(
+            actions.apply(DRIVE | HORN | PARKING, Some(false), UNKNOWN_MOTION, press),
+            HORN | PARKING
+        );
+        assert_eq!(
+            actions.apply(
+                DRIVE | HORN | PARKING,
+                Some(true),
+                UNKNOWN_MOTION,
+                press + ACK
+            ),
+            HORN
+        );
+        assert_eq!(
+            actions.apply(DRIVE | HORN, Some(true), UNKNOWN_MOTION, press + ACK * 2),
+            HORN
+        );
+        assert_eq!(
+            actions.apply(
+                DRIVE | HORN | PARKING,
+                Some(true),
+                UNKNOWN_MOTION,
+                press + ACK * 3
+            ),
+            HORN | PARKING
+        );
+        assert_eq!(
+            actions.apply(DRIVE, Some(false), UNKNOWN_MOTION, press + ACK * 4),
+            0
+        );
+    }
+    #[test]
     fn entering_park_never_releases_an_applied_brake_or_repeats_a_toggle() {
         let now = Instant::now();
         let mut a = Actions::default();

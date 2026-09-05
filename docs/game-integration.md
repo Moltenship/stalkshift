@@ -1,6 +1,6 @@
 # ETS2 control integration
 
-This prototype implements the full measured control set in MOZA "Multi function key switch direct" mode. The new selector, horn, hazards, parking brake and cruise functions are implemented and await combined game acceptance. See [the Russian control/test guide](controls-ru.md).
+This developer document records the implementation and game-test history. For installation and everyday use, read the player guides in [English](../README.md) or [Russian](../README.ru.md). Version 1.0 implements the measured control set in MOZA "Multi function key switch direct" mode; the acceptance table below distinguishes individual confirmations from unverified cases.
 
 ## Build and install
 

@@ -1,82 +1,85 @@
 # StalkShift
 
-An open-source Rust bridge between **MOZA Multi-function Stalks** and **Euro Truck Simulator 2** on Windows.
+**Use your MOZA Multi-function Stalks in Euro Truck Simulator 2.**
 
-**Status: full-control prototype for ETS2 1.60.1.7, ready for combined game acceptance.** The measured MOZA direct-mode profile implements indicators, lights, beams, wipers, horn, hazards, D/N/R/P, parking brake, manual cruise and optional speed-limit cruise adjustment. Indicators, lights and a single MIST sweep on the standard New Actros have prior game confirmation. Newly added controls are covered by hardware replays and automated tests but still need game acceptance. See the [Russian control/test guide](docs/controls-ru.md) and [acceptance table](docs/game-integration.md).
+Turn the lights on, select a gear, use the wipers and control cruise directly from your stalks. StalkShift is free and open source.
 
-## Try the controls in ETS2
+English · [Русский](README.ru.md)
 
-```powershell
-cargo build --release --workspace --locked
-python scripts/probe_plugin.py target/release/stalkshift_plugin.dll
-```
+**[Download for Windows](https://github.com/Moltenship/stalkshift/releases/download/v1.0.0/StalkShift-1.0.0-windows-x64.zip)** · [All controls](docs/controls-en.md) · [Report a problem](https://github.com/Moltenship/stalkshift/issues)
 
-Close ETS2, install the plugin, and start the bridge:
+## What you need
 
-```powershell
-.\scripts\install-plugin.ps1 -GameDirectory 'C:\Program Files (x86)\Steam\steamapps\common\Euro Truck Simulator 2'
-.\target\release\stalkshift.exe bridge --device 0
-```
+- A Windows 64-bit PC with Euro Truck Simulator 2 installed.
+- MOZA Multi-function Stalks connected directly by USB.
+- MOZA Pit House, with the stalks set to **Multi function key switch direct**.
 
-Enter the truck and wait for `ready=true`, then move each position control to synchronize it. Release the beam lever before pressing it. The indicator, light ring and front-wiper thumbwheel send movement pulses, so each requires re-arming after pause/reconnect. The small front-wiper thumbwheel is beside MIST/OFF/INT/LO/HI on the right stalk; the end ring marked REAR is a different control. See [game integration](docs/game-integration.md) for assignments, disconnect behavior and acceptance checks. Install the matching application and DLL together: this build uses protocol v3 and does not connect to previous v1/v2 DLLs.
+Version 1.0 targets ETS2. Game testing used ETS2 1.60.1.7 with standard Mercedes-Benz New Actros and Scania trucks. Other game versions, truck mods, American Truck Simulator and H-pattern shifters have not been verified. For gear selection, use an automatic or sequential transmission setting in ETS2.
 
-## Try the diagnostics
+## Install
 
-Requires Windows x64 and the Rust MSVC build prerequisites. The toolchain is pinned in `rust-toolchain.toml`; Cargo fetches locked dependencies. Build:
+1. [Download StalkShift 1.0](https://github.com/Moltenship/stalkshift/releases/download/v1.0.0/StalkShift-1.0.0-windows-x64.zip). Right-click the downloaded ZIP, choose **Extract All**, and keep the extracted folder somewhere convenient.
+2. Close ETS2 and any running StalkShift window.
+3. Open **Install.cmd** in the extracted folder. Choose English or Russian. The installer finds ETS2 in your Steam libraries. If it asks for the game folder, find it through Steam → ETS2 → Manage → Browse local files.
+4. Choose the profile you play with. This removes existing stalk button assignments that could trigger an action twice. Your keyboard, wheel and pedal assignments stay in place. Enter **0** to skip this step if you prefer to remove stalk assignments yourself in ETS2.
+5. Wait for the installation confirmation. If Windows reports access denied, right-click **Install.cmd** and choose **Run as administrator**.
 
-```powershell
-cargo build --release --locked -p stalkshift
-.\target\release\stalkshift.exe list
-```
+Keep the whole extracted folder together. Installation adds the StalkShift game plugin and saves backups before changing existing files. You do not need to install programming tools or assign every stalk movement yourself.
 
-Connect the stalks directly through USB. `list` displays only MOZA `346e:0024` interfaces, confirmed on the measured device. Multiple HID collections may appear; choose an explicit index, and list again after reconnecting.
+## Play
 
-```powershell
-.\target\release\stalkshift.exe record --device 0 --label "indicators: centre-left-centre-right-centre" --seconds 15 --output captures/indicators-01.jsonl
-.\target\release\stalkshift.exe inspect captures/indicators-01.jsonl
-```
+1. Connect the stalks by USB. In Pit House, select **Multi function key switch direct**. Turn off any keyboard emulation for these controls, and close other stalk bridge programs.
+2. Open **Start.cmd**. Leave its window open while playing; you can minimize it.
+3. Start ETS2. Accept the third-party SDK notification if it appears, load your truck and turn on the ignition.
+4. Move the controls you want to use. For example, move the indicator out of centre and back, then choose the light and wiper positions you need.
 
-Recording begins immediately. Move the named control during the recording. The recorder sends no output or feature reports and makes no changes to Pit House, drivers or game configuration. It preserves all received input reports, including duplicates. Existing recordings are never overwritten.
+After loading, pausing or reconnecting USB, release spring-loaded controls and move position switches again. StalkShift waits for a new movement instead of restoring a gear or held button on its own. Before first using the REAR ring for hazards, turn it to the upper fixed position and back to OFF.
 
-Without a device:
+Open **Start.cmd** each time you want to play. Close its window when you finish.
 
-```powershell
-cargo run --locked -p stalkshift -- inspect fixtures/synthetic-transition.jsonl
-```
+## Your controls at a glance
 
-Expected: 4 reports, 2 changes, changed byte offset `{1}`. The fixture is synthetic and carries **no real MOZA mapping**.
+| Control | What it does |
+|---|---|
+| Left stalk up / down / centre | Indicators / off |
+| Left light ring | Lights off / parking lights / low beam |
+| Left stalk towards you / away from you | Flash headlights while held / toggle high beam |
+| Small front-wiper wheel on the right stalk | OFF / intermittent / slow / fast; MIST gives one sweep |
+| Right stalk fixed positions, bottom to top | D / N / R / P |
+| Right stalk towards you | Horn while held |
+| Right stalk below D | Toggle parking brake once |
+| REAR ring, spring turn down from OFF | Toggle hazard lights once |
+| Small cruise stalk ON/OFF spring ring | Turn cruise on / off |
+| Small cruise stalk towards you / up / down | Resume or cancel / increase / decrease cruise speed |
+| Small spring switch beside the left light ring | Turn speed-limit cruise adjustment on / off |
 
-Replay the measured direct-mode indicator sequence without hardware:
+Selecting **P** puts the truck in neutral and applies the parking brake. Moving from **P to R, N or D releases the parking brake** if it is on. Pulling the right stalk while pushing it below D sounds the horn and toggles the parking brake together.
 
-```powershell
-cargo run --locked -p stalkshift -- decode-indicators fixtures/moza/direct-indicators.jsonl
-```
+To try cruise, drive at about **40–50 km/h**, release the brake and clutch, turn the little **ON/OFF ring** once and release it. Then release the accelerator. The truck should hold speed. This ring rotates and springs back; it is not an end button.
 
-The decoder produces right → centre → left → centre twice. The operator corrected the original recording's direction labels during in-game testing; the recorded bytes are unchanged. Zero reports between the 150 ms pulses do not cancel the physical position. At startup/reconnect, position remains unknown until an event is observed.
+**[Read the full control guide](docs/controls-en.md)** for each movement, cruise adjustment and what happens after a pause.
 
-See [the capture procedure](docs/hid-capture.md) for the full measurement checklist, file format and limitations. Raw captures stay in ignored `captures/`; review evidence before deliberately adding hardware fixtures to the repository.
+## If something does not work
+
+| Problem | What to try |
+|---|---|
+| Nothing responds | Keep Start.cmd open, check USB and the Pit House mode, then load the cab. The StalkShift window shows `ready=true` when the game is connected and accepting controls. Release and move the controls again. |
+| An action happens twice, or turns on then off | Run Install.cmd again and select your profile to remove duplicate stalk assignments. Disable Pit House keyboard emulation and close other stalk bridges. |
+| Cruise does not hold speed | Try it on the road at 40–50 km/h with brake and clutch released. Compare with ETS2's cruise key, normally C. If C also fails, check the game's cruise settings and driving conditions. |
+| Hazards do not respond | Turn REAR to the upper fixed position, back to OFF, then into the spring-loaded position below OFF. |
+| Wiper speeds look the same | The truck determines the available animations. Try a standard truck with the ignition on. |
+| Start asks you to install again | Open Install.cmd from the same folder as Start.cmd. Do not mix files from different versions. |
+
+Still stuck? [Open an issue](https://github.com/Moltenship/stalkshift/issues) in English or Russian. Include your ETS2 version, truck, Pit House mode, the movement you made and what happened. Session logs are in `%LOCALAPPDATA%\StalkShift\logs`, which you can paste into File Explorer's address bar. Review a log before sharing it.
+
+## Update or remove
+
+To update, close ETS2 and StalkShift, extract the new release, and run its **Install.cmd**. Use **Start.cmd** from that new folder afterwards.
+
+To remove StalkShift, close ETS2 and StalkShift, then open **Uninstall.cmd**. It removes the StalkShift plugin. It restores the profile assignments backed up during installation only if you have not edited them since. Other plugins stay installed. Backups and logs remain in `%LOCALAPPDATA%\StalkShift`.
 
 ## Development
 
-```powershell
-cargo fmt --all -- --check
-cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo test --workspace --locked
-```
+Want to build or contribute? See the [development guide](docs/development.md). Player instructions are above; building from source is optional.
 
-| Crate | Responsibility |
-|---|---|
-| `stalkshift` | CLI commands and recording workflow |
-| `stalkshift-hid` | Windows HID discovery and read-only report capture |
-| `stalkshift-capture` | Versioned JSONL format and streaming offline validation |
-| `stalkshift-core` | Measured direct-mode indicator, light-ring, wiper-wheel and beam decoders |
-| `stalkshift-protocol` | Bounded named-pipe protocol, sessions, readiness epochs and input leases |
-| `stalkshift-plugin` | Windows x64 SCS Input/Telemetry DLL with bounded input dispatch |
-
-The core tests replay all ten reviewed hardware captures, including the operator's documented corrections. Protocol tests cover independent controls, invalid/conflicting commands, session changes, lease expiry and MIST interruption. HID access and IPC waits stay outside game callbacks. The actual DLL is probed against a mock SCS host for ABI layout, callback registration, failure rollback and repeated initialization/shutdown. Remaining game checks are recorded in [the acceptance table](docs/game-integration.md).
-
-## Project scope
-
-First complete version: indicators, lighting, wipers, hazards, horn, cruise controls, D/N/R/P, parking brake and optional speed-limit cruise adjustment. Development proceeds through tested milestones; this diagnostic build is not that full version. ATS is a later target.
-
-MIT licensed; see [third-party notices](THIRD_PARTY_NOTICES.md) for SCS SDK declarations. Independent community project; not affiliated with MOZA or SCS Software. [MOZA Truck Stalk Bridge](https://github.com/JacKJodel23/MOZA-Truck-Stalk-Bridge) is the behavior reference; this implementation is developed independently.
+StalkShift uses the [MIT license](LICENSE). It is an independent project, not an official MOZA or SCS Software product. See [third-party notices](THIRD_PARTY_NOTICES.md).
