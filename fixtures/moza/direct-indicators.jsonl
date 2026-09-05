@@ -1,4 +1,4 @@
-{"type":"header","schema":1,"tool_version":"0.1.0-dev","label":"confirmed centre-left-centre-right-centre twice; Multi function key switch direct; Pit House 1.4.0.30","device":{"vendor_id":13422,"product_id":36,"usage_page":1,"usage":4,"interface_number":2,"product":"MOZA Multi-function Stalk","release_number":256},"descriptor":[5,1,9,4,161,1,5,9,25,1,41,32,21,0,37,1,117,1,149,32,129,2,192],"descriptor_error":null}
+{"type":"header","schema":1,"tool_version":"0.1.0-dev","label":"corrected centre-right-centre-left-centre twice; operator corrected reversed directions during ETS2 test; Multi function key switch direct; Pit House 1.4.0.30","device":{"vendor_id":13422,"product_id":36,"usage_page":1,"usage":4,"interface_number":2,"product":"MOZA Multi-function Stalk","release_number":256},"descriptor":[5,1,9,4,161,1,5,9,25,1,41,32,21,0,37,1,117,1,149,32,129,2,192],"descriptor_error":null}
 {"type":"report","sequence":0,"elapsed_us":47461,"data":[0,0,0,0,0,0,0,0]}
 {"type":"report","sequence":1,"elapsed_us":247452,"data":[0,0,0,0,0,0,0,0]}
 {"type":"report","sequence":2,"elapsed_us":447481,"data":[0,0,0,0,0,0,0,0]}

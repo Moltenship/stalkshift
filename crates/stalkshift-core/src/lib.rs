@@ -71,9 +71,9 @@ impl DirectIndicatorDecoder {
             return Ok(None);
         }
         let position = match pulse {
-            0x0080 => IndicatorPosition::Left,
+            0x0080 => IndicatorPosition::Right,
             0x0100 => IndicatorPosition::Centre,
-            0x0200 => IndicatorPosition::Right,
+            0x0200 => IndicatorPosition::Left,
             _ => unreachable!("masked, nonzero single-bit pulse"),
         };
         if position == self.position {
@@ -89,9 +89,9 @@ mod tests {
     use super::*;
 
     const ZERO: [u8; 8] = [0; 8];
-    const LEFT: [u8; 8] = [128, 0, 0, 0, 0, 0, 0, 0];
+    const LEFT: [u8; 8] = [0, 2, 0, 0, 0, 0, 0, 0];
     const CENTRE: [u8; 8] = [0, 1, 0, 0, 0, 0, 0, 0];
-    const RIGHT: [u8; 8] = [0, 2, 0, 0, 0, 0, 0, 0];
+    const RIGHT: [u8; 8] = [128, 0, 0, 0, 0, 0, 0, 0];
 
     #[test]
     fn idle_reports_do_not_invent_initial_centre() {
@@ -142,7 +142,7 @@ mod tests {
     fn unrelated_buttons_can_be_combined_with_position_events() {
         let mut decoder = DirectIndicatorDecoder::default();
         assert_eq!(
-            decoder.feed(&[129, 0, 255, 255, 0, 0, 0, 0]).unwrap(),
+            decoder.feed(&[1, 2, 255, 255, 0, 0, 0, 0]).unwrap(),
             Some(IndicatorPosition::Left)
         );
         assert_eq!(decoder.feed(&[1, 0, 255, 255, 0, 0, 0, 0]).unwrap(), None);
@@ -177,7 +177,7 @@ mod tests {
         assert_eq!(summary.reports, 306);
         assert_eq!(
             positions,
-            [Left, Centre, Right, Centre, Left, Centre, Right, Centre]
+            [Right, Centre, Left, Centre, Right, Centre, Left, Centre]
         );
         assert_eq!(decoder.position(), Centre);
     }

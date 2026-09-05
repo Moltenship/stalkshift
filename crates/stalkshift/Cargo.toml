@@ -12,6 +12,10 @@ clap.workspace = true
 stalkshift-capture.workspace = true
 stalkshift-hid.workspace = true
 stalkshift-core.workspace = true
+stalkshift-protocol.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+tokio.workspace = true
 
 [lints]
 workspace = true

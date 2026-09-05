@@ -1,5 +1,6 @@
 /target/
 /captures/
+/backups/
 *.log
 .env
 .env.*

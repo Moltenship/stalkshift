@@ -1,0 +1,22 @@
+[package]
+name = "stalkshift-plugin"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "SCS Input and Telemetry DLL for StalkShift indicators"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+stalkshift-protocol.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+tokio.workspace = true
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+undocumented_unsafe_blocks = "deny"

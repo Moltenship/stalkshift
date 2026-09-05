@@ -41,6 +41,13 @@ pub fn discover() -> Result<Vec<Device>> {
 }
 
 impl Device {
+    pub fn identity(&self) -> (u16, u16, i32) {
+        (
+            self.metadata.usage_page,
+            self.metadata.usage,
+            self.metadata.interface_number,
+        )
+    }
     pub fn open(&self) -> Result<HidDevice> {
         HidApi::new()?.open_path(&self.path).context(
             "open selected MOZA interface; reconnect and run list again, and check HidHide access",

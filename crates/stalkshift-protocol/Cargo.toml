@@ -1,0 +1,16 @@
+[package]
+name = "stalkshift-protocol"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Bounded StalkShift IPC frames and fail-safe input lease"
+
+[dependencies]
+stalkshift-core.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+tokio.workspace = true
+
+[lints]
+workspace = true

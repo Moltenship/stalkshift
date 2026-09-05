@@ -5,6 +5,9 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 
+#[cfg(windows)]
+mod bridge;
+
 #[derive(Parser)]
 #[command(
     version,
@@ -38,6 +41,14 @@ enum Command {
     Inspect { file: PathBuf },
     /// Decode an existing capture with the measured direct-mode indicator profile.
     DecodeIndicators { file: PathBuf },
+    /// Connect the direct-mode MOZA indicators to the StalkShift ETS2 plugin.
+    Bridge {
+        #[arg(long)]
+        device: usize,
+        /// Optional time limit for diagnostics. Otherwise runs until Ctrl+C.
+        #[arg(long, value_parser = clap::value_parser!(u64).range(1..))]
+        seconds: Option<u64>,
+    },
 }
 
 fn nonempty_label(value: &str) -> Result<String, String> {
@@ -50,6 +61,17 @@ fn nonempty_label(value: &str) -> Result<String, String> {
 fn main() -> Result<()> {
     match Cli::parse().command {
         Command::List => list(),
+        Command::Bridge { device, seconds } => {
+            #[cfg(windows)]
+            {
+                bridge::run(device, seconds)
+            }
+            #[cfg(not(windows))]
+            {
+                let _ = (device, seconds);
+                anyhow::bail!("The game bridge currently requires Windows x64")
+            }
+        }
         Command::Record {
             device,
             output,

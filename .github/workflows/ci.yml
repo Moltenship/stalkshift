@@ -21,20 +21,28 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Test
         run: cargo test --workspace --locked
-      - name: Build diagnostic executable
-        run: cargo build --release --locked -p stalkshift
+      - name: Build bridge and game DLL
+        run: cargo build --release --locked --workspace
+      - name: Probe actual DLL with mock SCS host
+        run: python scripts/probe_plugin.py target/release/stalkshift_plugin.dll
       - name: Inspect synthetic capture
         run: ./target/release/stalkshift.exe inspect fixtures/synthetic-transition.jsonl
       - name: Decode measured MOZA indicator sequence
         run: ./target/release/stalkshift.exe decode-indicators fixtures/moza/direct-indicators.jsonl
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: stalkshift-windows-x64-diagnostics
+          name: stalkshift-windows-x64-indicators
           path: |
             target/release/stalkshift.exe
+            target/release/stalkshift_plugin.dll
             README.md
             LICENSE
-            docs/hid-capture.md
+            THIRD_PARTY_NOTICES.md
+            third-party/scs-sdk-LICENSE.txt
+            docs/
+            fixtures/
+            scripts/install-plugin.ps1
+            scripts/probe_plugin.py
           if-no-files-found: error
   portable:
     name: Portable capture parser
@@ -42,4 +50,4 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: rustup show
-      - run: cargo test -p stalkshift-capture -p stalkshift-core --locked
+      - run: cargo test -p stalkshift-capture -p stalkshift-core -p stalkshift-protocol --locked

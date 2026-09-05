@@ -2,7 +2,23 @@
 
 An open-source Rust bridge between **MOZA Multi-function Stalks** and **Euro Truck Simulator 2** on Windows.
 
-**Status: hardware discovery and indicator decoder milestone.** USB capture and left/centre/right decoding have been exercised on one real MOZA device in direct mode; see [hardware observations](docs/hardware-observations.md). The repository provides a recording CLI, offline validation and a tested indicator state machine. It does **not yet control ETS2**, contain a game plugin, or have a complete MOZA button map. The first complete version targets all controls described in [the plan](PLAN.md), including D/N/R/P and optional speed-limit cruise adjustment.
+**Status: indicator bridge prototype.** USB capture and left/centre/right decoding have been exercised on one real MOZA device in direct mode. A Rust DLL now connects the bridge to the official SCS Input and Telemetry APIs; real-game acceptance is in progress. Lights, wipers, cruise and gears are not implemented yet. The first complete version still targets all controls described in [the plan](PLAN.md), including D/N/R/P and optional speed-limit cruise adjustment.
+
+## Try indicators in ETS2
+
+```powershell
+cargo build --release --workspace --locked
+python scripts/probe_plugin.py target/release/stalkshift_plugin.dll
+```
+
+Close ETS2, install the plugin, and start the bridge:
+
+```powershell
+.\scripts\install-plugin.ps1 -GameDirectory 'C:\Program Files (x86)\Steam\steamapps\common\Euro Truck Simulator 2'
+.\target\release\stalkshift.exe bridge --device 0
+```
+
+Enter the truck and wait for `ready=true`, then move the indicator through centre to synchronize. This initial prototype requires re-arming after pause/reconnect because the measured device mode sends movement pulses, not persistent positions. See [game integration](docs/game-integration.md) for prerequisites, disconnect behavior and acceptance checks.
 
 ## Try the diagnostics
 
@@ -13,7 +29,7 @@ cargo build --release --locked -p stalkshift
 .\target\release\stalkshift.exe list
 ```
 
-Connect the stalks directly through USB. `list` displays only MOZA `346e:0024` interfaces. This ID is a starting point from the existing community bridge and must be confirmed on actual hardware. Multiple HID collections may appear; choose an explicit index, and list again after reconnecting.
+Connect the stalks directly through USB. `list` displays only MOZA `346e:0024` interfaces, confirmed on the measured device. Multiple HID collections may appear; choose an explicit index, and list again after reconnecting.
 
 ```powershell
 .\target\release\stalkshift.exe record --device 0 --label "indicators: centre-left-centre-right-centre" --seconds 15 --output captures/indicators-01.jsonl
@@ -36,7 +52,7 @@ Replay the measured direct-mode indicator sequence without hardware:
 cargo run --locked -p stalkshift -- decode-indicators fixtures/moza/direct-indicators.jsonl
 ```
 
-The decoder produces left → centre → right → centre twice. Zero reports between the 150 ms pulses do not cancel the physical position. At startup/reconnect, position remains unknown until an event is observed.
+The decoder produces right → centre → left → centre twice. The operator corrected the original recording's direction labels during in-game testing; the recorded bytes are unchanged. Zero reports between the 150 ms pulses do not cancel the physical position. At startup/reconnect, position remains unknown until an event is observed.
 
 See [the capture procedure](docs/hid-capture.md) for the full measurement checklist, file format and limitations. Raw captures stay in ignored `captures/`; review evidence before deliberately adding hardware fixtures to the repository.
 
@@ -54,11 +70,13 @@ cargo test --workspace --locked
 | `stalkshift-hid` | Windows HID discovery and read-only report capture |
 | `stalkshift-capture` | Versioned JSONL format and streaming offline validation |
 | `stalkshift-core` | Measured direct-mode indicator decoder and state machine |
+| `stalkshift-protocol` | Bounded named-pipe protocol, sessions, readiness epochs and input leases |
+| `stalkshift-plugin` | Windows x64 DLL exporting SCS Input and Telemetry APIs |
 
-Next: prove SCS semantic input with a minimal Rust DLL, connect the indicator decoder, and record the remaining controls. The proposed game bridge will use the official SCS Input and Telemetry APIs. HID access and IPC waits will stay outside game callbacks.
+Next: finish in-game indicator acceptance and record the remaining controls. HID access and IPC waits stay outside game callbacks. The DLL is probed as a real PE binary against a mock SCS host; this checks ABI layout, callback registration, failure rollback and repeated initialization/shutdown independently of the game.
 
 ## Project scope
 
 First complete version: indicators, lighting, wipers, hazards, horn, cruise controls, D/N/R/P, parking brake and optional speed-limit cruise adjustment. Development proceeds through tested milestones; this diagnostic build is not that full version. ATS is a later target.
 
-MIT licensed. Independent community project; not affiliated with MOZA or SCS Software. [MOZA Truck Stalk Bridge](https://github.com/JacKJodel23/MOZA-Truck-Stalk-Bridge) is the behavior reference; this implementation is developed independently.
+MIT licensed; see [third-party notices](THIRD_PARTY_NOTICES.md) for SCS SDK declarations. Independent community project; not affiliated with MOZA or SCS Software. [MOZA Truck Stalk Bridge](https://github.com/JacKJodel23/MOZA-Truck-Stalk-Bridge) is the behavior reference; this implementation is developed independently.
