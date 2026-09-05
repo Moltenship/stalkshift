@@ -2,7 +2,7 @@
 
 An open-source Rust bridge between **MOZA Multi-function Stalks** and **Euro Truck Simulator 2** on Windows.
 
-**Status: hardware discovery milestone.** The repository currently provides a working HID recording CLI and offline capture validation. It does **not yet control ETS2**, contain a game plugin, or have a verified MOZA button map. The first complete version targets all controls described in [the plan](PLAN.md), including D/N/R/P and optional speed-limit cruise adjustment.
+**Status: hardware discovery milestone.** The repository currently provides a working HID recording CLI and offline capture validation. USB discovery and report capture have been exercised on one real MOZA device; see [hardware observations](docs/hardware-observations.md). It does **not yet control ETS2**, contain a game plugin, or have a verified MOZA button map. The first complete version targets all controls described in [the plan](PLAN.md), including D/N/R/P and optional speed-limit cruise adjustment.
 
 ## Try the diagnostics
 
